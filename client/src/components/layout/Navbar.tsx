@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { Link, useLocation } from 'wouter';
 import { useAuth } from '@/hooks/use-auth';
 import { Button } from '@/components/ui/button';
-import { LogOut, User } from 'lucide-react';
+import { LogOut, User, BarChart3 } from 'lucide-react';
 
 interface NavLinkProps {
   href: string;
@@ -67,6 +67,15 @@ const Navbar = () => {
             
             {user ? (
               <div className="flex items-center space-x-4">
+                <Button 
+                  variant="outline" 
+                  size="sm" 
+                  onClick={() => navigate('/dashboard')}
+                  className="flex items-center space-x-1"
+                >
+                  <BarChart3 className="h-4 w-4 mr-1" />
+                  <span>Dashboard</span>
+                </Button>
                 <div className="flex items-center space-x-2 text-sm">
                   <User className="h-4 w-4" />
                   <span>{user.username}</span>
@@ -165,6 +174,15 @@ const Navbar = () => {
                 <User className="h-4 w-4" />
                 <span>{user.username}</span>
               </div>
+              <Button 
+                variant="outline" 
+                size="sm" 
+                onClick={() => navigate('/dashboard')}
+                className="flex items-center space-x-1 w-full justify-center mx-4 mb-2"
+              >
+                <BarChart3 className="h-4 w-4 mr-1" />
+                <span>Dashboard</span>
+              </Button>
               <Button 
                 variant="outline" 
                 size="sm" 
