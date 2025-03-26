@@ -1,5 +1,8 @@
 import React, { useState } from 'react';
-import { Link } from 'wouter';
+import { Link, useLocation } from 'wouter';
+import { useAuth } from '@/hooks/use-auth';
+import { Button } from '@/components/ui/button';
+import { LogOut, User } from 'lucide-react';
 
 interface NavLinkProps {
   href: string;
@@ -18,9 +21,23 @@ const NavLink = ({ href, children, className = '' }: NavLinkProps) => (
 
 const Navbar = () => {
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+  const { user, logoutMutation } = useAuth();
+  const [, navigate] = useLocation();
 
   const toggleMobileMenu = () => {
     setIsMobileMenuOpen(!isMobileMenuOpen);
+  };
+
+  const handleLogout = () => {
+    logoutMutation.mutate(undefined, {
+      onSuccess: () => {
+        navigate('/auth');
+      }
+    });
+  };
+
+  const goToLogin = () => {
+    navigate('/auth');
   };
 
   return (
@@ -47,9 +64,33 @@ const Navbar = () => {
             <a href="#demo" className="bg-primary text-white hover:bg-primary/90 px-4 py-2 rounded-md text-sm font-medium">
               Try Demo
             </a>
-            <a href="#login" className="bg-white border border-gray-300 text-gray-700 hover:bg-gray-50 px-4 py-2 rounded-md text-sm font-medium">
-              Login
-            </a>
+            
+            {user ? (
+              <div className="flex items-center space-x-4">
+                <div className="flex items-center space-x-2 text-sm">
+                  <User className="h-4 w-4" />
+                  <span>{user.username}</span>
+                </div>
+                <Button 
+                  variant="outline" 
+                  size="sm" 
+                  onClick={handleLogout}
+                  disabled={logoutMutation.isPending}
+                  className="flex items-center space-x-1"
+                >
+                  <LogOut className="h-4 w-4 mr-1" />
+                  <span>Logout</span>
+                </Button>
+              </div>
+            ) : (
+              <Button 
+                variant="outline" 
+                size="sm" 
+                onClick={goToLogin}
+              >
+                Login
+              </Button>
+            )}
           </div>
           <div className="-mr-2 flex items-center sm:hidden">
             <button
@@ -59,7 +100,20 @@ const Navbar = () => {
               onClick={toggleMobileMenu}
             >
               <span className="sr-only">Open main menu</span>
-              <i className="fa-solid fa-bars w-6 h-6"></i>
+              <svg 
+                xmlns="http://www.w3.org/2000/svg" 
+                className="h-6 w-6" 
+                fill="none" 
+                viewBox="0 0 24 24" 
+                stroke="currentColor"
+              >
+                <path 
+                  strokeLinecap="round" 
+                  strokeLinejoin="round" 
+                  strokeWidth={2} 
+                  d="M4 6h16M4 12h16M4 18h16" 
+                />
+              </svg>
             </button>
           </div>
         </div>
@@ -104,12 +158,34 @@ const Navbar = () => {
           >
             Try Demo
           </a>
-          <a
-            href="#login"
-            className="block text-center mx-4 my-2 px-4 py-2 rounded-md text-base font-medium text-gray-700 bg-white border border-gray-300 hover:bg-gray-50"
-          >
-            Login
-          </a>
+          
+          {user ? (
+            <div className="flex flex-col items-center mt-4">
+              <div className="flex items-center space-x-2 text-sm mb-2">
+                <User className="h-4 w-4" />
+                <span>{user.username}</span>
+              </div>
+              <Button 
+                variant="outline" 
+                size="sm" 
+                onClick={handleLogout}
+                disabled={logoutMutation.isPending}
+                className="flex items-center space-x-1 w-full justify-center mx-4"
+              >
+                <LogOut className="h-4 w-4 mr-1" />
+                <span>Logout</span>
+              </Button>
+            </div>
+          ) : (
+            <Button 
+              variant="outline" 
+              size="sm" 
+              onClick={goToLogin}
+              className="w-full mx-4"
+            >
+              Login
+            </Button>
+          )}
         </div>
       </div>
     </nav>

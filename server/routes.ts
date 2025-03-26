@@ -4,8 +4,12 @@ import { storage } from "./storage";
 import { contactSchema, newsletterSchema } from "@shared/schema";
 import { ZodError } from "zod";
 import { fromZodError } from "zod-validation-error";
+import { setupAuth } from "./auth";
 
 export async function registerRoutes(app: Express): Promise<Server> {
+  // Set up authentication routes
+  setupAuth(app);
+
   // API routes for form submissions
   app.post("/api/contact", async (req, res) => {
     try {
