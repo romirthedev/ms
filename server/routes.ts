@@ -18,6 +18,10 @@ import { simpleBrowserService } from "./services/simpleBrowserService";
 import { localAnalysisService } from "./services/localAnalysisService";
 import { alphaVantageService } from "./services/alphaVantageService";
 import { getTopLosers, getDeepseekInfo } from "./services/yfinanceAdapter";
+import path from 'path';
+import { fileURLToPath } from 'url';
+import { dirname } from 'path';
+import { spawn } from 'child_process';
 
 // Middleware to check if user is authenticated
 const isAuthenticated = (req: Request, res: any, next: any) => {
@@ -306,16 +310,141 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
   
+  // Helper function to run the simpleYfinanceService.py script
+  async function runSimpleYfinanceService(industry: string | undefined, limit: number): Promise<any> {
+    return new Promise((resolve, reject) => {
+      // Get the current directory
+      const currentDir = path.resolve();
+      const scriptPath = path.join(currentDir, 'server/services/simpleYfinanceService.py');
+      
+      console.log(`Running script at ${scriptPath}`);
+      
+      // Build command arguments
+      const args = ['get_top_losers'];
+      
+      // Add industry filter if provided
+      if (industry && industry !== 'all') {
+        args.push('--industry');
+        args.push(industry);
+      }
+      
+      // Add limit
+      args.push('--limit');
+      args.push(limit.toString());
+      
+      console.log('Running Python with args:', args);
+      
+      console.log(`Full command: python3 ${scriptPath} ${args.join(' ')}`);
+      const pythonProcess = spawn('python3', [scriptPath, ...args]);
+      
+      let dataString = '';
+      let errorString = '';
+      
+      pythonProcess.stdout.on('data', (data) => {
+        dataString += data.toString();
+      });
+      
+      pythonProcess.stderr.on('data', (data) => {
+        errorString += data.toString();
+        console.error(`Python stderr: ${data}`);
+      });
+      
+      pythonProcess.on('close', (code) => {
+        if (code !== 0) {
+          return reject(new Error(`Python process exited with code ${code}: ${errorString}`));
+        }
+        
+        try {
+          const result = JSON.parse(dataString);
+          resolve(result);
+        } catch (err) {
+          reject(new Error(`Failed to parse Python output: ${err.message}`));
+        }
+      });
+    });
+  }
+
+  // Helper function to run the simpleDeepseekService.py script
+  async function runSimpleDeepseekService(symbol: string): Promise<any> {
+    return new Promise((resolve, reject) => {
+      // Get the current directory
+      const currentDir = path.resolve();
+      const scriptPath = path.join(currentDir, 'server/services/simpleDeepseekService.py');
+      
+      console.log(`Running deepseek script at ${scriptPath} for symbol ${symbol}`);
+      
+      // Check if file exists
+      try {
+        const fileExists = fs.existsSync(scriptPath);
+        console.log(`Script file exists: ${fileExists}`);
+        if (!fileExists) {
+          // List files in directory to see what we actually have
+          const serviceDir = path.join(currentDir, 'server/services');
+          console.log(`Listing files in ${serviceDir}:`);
+          const files = fs.readdirSync(serviceDir);
+          console.log(files);
+          return reject(new Error(`Python script not found at ${scriptPath}`));
+        }
+      } catch (err) {
+        console.error(`Error checking for script file:`, err);
+      }
+      
+      console.log(`Full command: python3 ${scriptPath} --symbol ${symbol}`);
+      const pythonProcess = spawn('python3', [scriptPath, '--symbol', symbol]);
+      
+      let dataString = '';
+      let errorString = '';
+      
+      pythonProcess.stdout.on('data', (data) => {
+        const chunk = data.toString();
+        console.log(`Python stdout: ${chunk}`);
+        dataString += chunk;
+      });
+      
+      pythonProcess.stderr.on('data', (data) => {
+        const chunk = data.toString();
+        console.error(`Python stderr: ${chunk}`);
+        errorString += chunk;
+      });
+      
+      pythonProcess.on('close', (code) => {
+        console.log(`Python process exited with code ${code}`);
+        
+        if (code !== 0) {
+          return reject(new Error(`Python process exited with code ${code}: ${errorString}`));
+        }
+        
+        // Debug the raw output
+        console.log(`Raw Python output: ${dataString}`);
+        
+        try {
+          const result = JSON.parse(dataString);
+          resolve(result);
+        } catch (err) {
+          reject(new Error(`Failed to parse Python output: ${dataString.substring(0, 200)}...`));
+        }
+      });
+    });
+  }
+
   // Get biggest losers sorted by price change percent (negative values)
   app.get("/api/stocks/losers", async (req, res) => {
     try {
       // Using the new YFinance data for the Biggest Losers page
       try {
-        console.log("Fetching real-time losers data using yfinance...");
+        console.log("Fetching real-time losers data using simple yfinance service...");
         const industry = req.query.industry as string | undefined;
-        const yfinanceResult = await getTopLosers(industry, 50);
+        
+        console.log(`Industry filter: ${industry || 'none'}`);
+        
+        // Use our simple service directly
+        console.log("About to run the yfinance service...");
+        const yfinanceResult = await runSimpleYfinanceService(industry, 50);
+        console.log("Python script result:", JSON.stringify(yfinanceResult).substring(0, 100) + '...');
         
         if (yfinanceResult.success && yfinanceResult.data) {
+          console.log(`Got ${yfinanceResult.data.length} stocks from yfinance service`);
+          
           // Get unique list of industries for filtering from the yfinance data
           const industriesSet = new Set<string>();
           yfinanceResult.data.forEach(stock => {
@@ -323,7 +452,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
               industriesSet.add(stock.industry);
             }
           });
-          const industries = Array.from(industriesSet);
+          const industries = yfinanceResult.industries || Array.from(industriesSet);
           
           return res.status(200).json({ 
             success: true, 
@@ -331,6 +460,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
             industries: industries,
             source: "yfinance"
           });
+        } else {
+          console.log("YFinance result was not successful:", yfinanceResult);
         }
       } catch (yfinanceError) {
         console.error("Error using yfinance, falling back to database:", yfinanceError);
@@ -384,7 +515,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.get("/api/deepseek/:symbol", async (req, res) => {
     try {
       const symbol = req.params.symbol;
-      const deepseekResult = await getDeepseekInfo(symbol);
+      console.log(`Fetching DeepSeek info for ${symbol} using simple service...`);
+      
+      // Use our simple DeepSeek service directly
+      const deepseekResult = await runSimpleDeepseekService(symbol);
       return res.status(200).json(deepseekResult);
     } catch (error) {
       console.error("Error fetching DeepSeek info:", error);
