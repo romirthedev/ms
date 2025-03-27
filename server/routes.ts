@@ -16,6 +16,7 @@ import { newsService } from "./services/newsService";
 import { browserScrapingService } from "./services/browserScrapingService";
 import { simpleBrowserService } from "./services/simpleBrowserService"; 
 import { localAnalysisService } from "./services/localAnalysisService";
+import { alphaVantageService } from "./services/alphaVantageService";
 
 // Middleware to check if user is authenticated
 const isAuthenticated = (req: Request, res: any, next: any) => {
@@ -51,6 +52,18 @@ async function performDataUpdate() {
     // Use our simple browser service which doesn't depend on Puppeteer
     // This provides reliable news generation without external dependencies
     await simpleBrowserService.updateAllStockNews();
+    
+    // Update stock prices using Alpha Vantage for real-time data
+    // This happens less frequently due to API rate limits (every 3 cycles)
+    const currentTime = new Date();
+    if (currentTime.getMinutes() % 3 === 0) {
+      console.log("Updating real-time stock prices from Alpha Vantage...");
+      try {
+        await alphaVantageService.updateStockPrices();
+      } catch (priceError) {
+        console.error("Error updating real-time prices:", priceError);
+      }
+    }
     
     // Update stock analysis using our local algorithm instead of external API
     await localAnalysisService.updateAllStockAnalyses();
@@ -289,6 +302,94 @@ export async function registerRoutes(app: Express): Promise<Server> {
       return res.status(200).json({ success: true, message: "Analysis update triggered successfully using local algorithm" });
     } catch (error) {
       return res.status(500).json({ success: false, message: "Failed to trigger analysis update" });
+    }
+  });
+  
+  // Alpha Vantage real-time price endpoints
+  
+  // Get real-time stock quote
+  app.get("/api/realtime/quote/:symbol", async (req, res) => {
+    try {
+      const quoteData = await alphaVantageService.getStockQuote(req.params.symbol);
+      
+      if (!quoteData) {
+        // Get from database as fallback
+        const stock = await storage.getStockBySymbol(req.params.symbol);
+        if (!stock) {
+          return res.status(404).json({ success: false, message: "Stock not found" });
+        }
+        return res.status(200).json({ 
+          success: true, 
+          data: {
+            symbol: stock.symbol,
+            price: stock.currentPrice,
+            previousClose: stock.previousClose,
+            change: stock.priceChange,
+            changePercent: stock.priceChangePercent,
+            source: "database" // Indicate this is from database, not real-time
+          }
+        });
+      }
+      
+      // Format the Alpha Vantage data
+      const quote = quoteData['Global Quote'];
+      return res.status(200).json({
+        success: true,
+        data: {
+          symbol: quote['01. symbol'],
+          price: parseFloat(quote['05. price']),
+          previousClose: parseFloat(quote['08. previous close']),
+          change: parseFloat(quote['09. change']),
+          changePercent: parseFloat(quote['10. change percent'].replace('%', '')),
+          volume: parseInt(quote['06. volume']),
+          latestTradingDay: quote['07. latest trading day'],
+          source: "alpha_vantage" // Indicate this is real-time data
+        }
+      });
+    } catch (error) {
+      console.error("Error fetching real-time quote:", error);
+      return res.status(500).json({ success: false, message: "Failed to fetch real-time stock data" });
+    }
+  });
+  
+  // Search for stocks
+  app.get("/api/realtime/search", async (req, res) => {
+    try {
+      const keywords = req.query.keywords as string;
+      
+      if (!keywords) {
+        return res.status(400).json({ success: false, message: "Keywords parameter is required" });
+      }
+      
+      const searchResults = await alphaVantageService.searchStocks(keywords);
+      
+      if (!searchResults || !searchResults.bestMatches || searchResults.bestMatches.length === 0) {
+        return res.status(200).json({ success: true, data: [] });
+      }
+      
+      // Format the search results
+      const formattedResults = searchResults.bestMatches.map(match => ({
+        symbol: match['1. symbol'],
+        name: match['2. name'],
+        type: match['3. type'],
+        region: match['4. region'],
+        matchScore: parseFloat(match['9. matchScore'])
+      }));
+      
+      return res.status(200).json({ success: true, data: formattedResults });
+    } catch (error) {
+      console.error("Error searching stocks:", error);
+      return res.status(500).json({ success: false, message: "Failed to search stocks" });
+    }
+  });
+  
+  // Manually trigger real-time price update for a specific stock
+  app.post("/api/admin/update-prices", async (req, res) => {
+    try {
+      await alphaVantageService.updateStockPrices();
+      return res.status(200).json({ success: true, message: "Stock prices updated successfully from Alpha Vantage" });
+    } catch (error) {
+      return res.status(500).json({ success: false, message: "Failed to update stock prices" });
     }
   });
 

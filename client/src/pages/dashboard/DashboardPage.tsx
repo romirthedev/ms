@@ -415,25 +415,43 @@ const DashboardPage = () => {
                 <div className="space-y-4">
                   {stockNews.data.map((news) => (
                     <div key={news.id} className="border-b pb-4 last:border-0">
-                      <h4 className="font-medium">{news.title}</h4>
-                      <p className="text-sm text-gray-600 line-clamp-2 mt-1">{news.content}</p>
-                      <div className="flex justify-between items-center mt-2">
-                        <span className="text-xs text-gray-500">
-                          {news.source} • {formatDate(news.publishedAt.toString())}
-                        </span>
-                        <Badge className={`${news.sentiment && news.sentiment > 0.6 ? 'bg-green-100 text-green-800' : news.sentiment && news.sentiment < 0.4 ? 'bg-red-100 text-red-800' : 'bg-gray-100 text-gray-800'}`}>
-                          {news.sentiment ? `${Math.round(news.sentiment * 100)}%` : 'N/A'}
-                        </Badge>
-                      </div>
                       <a 
                         href={news.url} 
                         target="_blank" 
                         rel="noopener noreferrer"
-                        className="text-sm text-primary underline mt-2 inline-block flex items-center"
+                        className="font-medium hover:text-primary transition-colors"
                       >
-                        <span>Read more</span>
-                        <ExternalLink className="ml-1 h-3 w-3" />
+                        <h4 className="flex items-center">
+                          {news.title}
+                          <ExternalLink className="ml-1 h-3 w-3 opacity-50" />
+                        </h4>
                       </a>
+                      <p className="text-sm text-gray-600 line-clamp-2 mt-1">{news.content}</p>
+                      <div className="flex justify-between items-center mt-2">
+                        <div className="flex items-center">
+                          <Badge variant="outline" className="mr-2">
+                            {news.source}
+                          </Badge>
+                          <span className="text-xs text-gray-500">
+                            {formatDate(news.publishedAt.toString())}
+                          </span>
+                        </div>
+                        <Badge className={`${news.sentiment && news.sentiment > 0.6 ? 'bg-green-100 text-green-800' : news.sentiment && news.sentiment < 0.4 ? 'bg-red-100 text-red-800' : 'bg-gray-100 text-gray-800'}`}>
+                          {news.sentiment ? `${Math.round(news.sentiment * 100)}%` : 'N/A'}
+                        </Badge>
+                      </div>
+                      <div className="mt-2 text-xs text-gray-500 flex items-center">
+                        <Newspaper className="h-3 w-3 mr-1" />
+                        <span>Source: </span>
+                        <a 
+                          href={news.url} 
+                          target="_blank" 
+                          rel="noopener noreferrer"
+                          className="text-primary hover:underline ml-1"
+                        >
+                          {new URL(news.url).hostname.replace('www.', '')}
+                        </a>
+                      </div>
                     </div>
                   ))}
                 </div>
