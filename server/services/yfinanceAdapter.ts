@@ -68,8 +68,7 @@ export async function getDeepseekInfo(symbol: string) {
   return new Promise((resolve, reject) => {
     // Build command arguments
     const args = [
-      path.join(__dirname, 'yfinanceService.py'),
-      'get_deepseek_info',
+      path.join(__dirname, 'simpleDeepseekService.py'),
       '--symbol',
       symbol
     ];
