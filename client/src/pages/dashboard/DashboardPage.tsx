@@ -57,6 +57,12 @@ const StockNewsSources: React.FC<{ stockSymbol: string }> = ({ stockSymbol }) =>
     enabled: true,
   });
 
+  // Local formatDate function to prevent reference errors
+  const formatNewsDate = (dateString: string) => {
+    const date = new Date(dateString);
+    return format(date, 'MMM d, yyyy');
+  };
+
   if (isLoading) return <div className="col-span-3 text-center py-2">Loading evidence sources...</div>;
   if (!data || !data.data || data.data.length === 0) {
     return <div className="col-span-3 text-center py-2">No evidence sources available</div>;
@@ -75,7 +81,7 @@ const StockNewsSources: React.FC<{ stockSymbol: string }> = ({ stockSymbol }) =>
           <div className="text-sm font-medium mb-1 line-clamp-2">{news.title}</div>
           <div className="flex justify-between items-center text-xs text-gray-500">
             <span>{news.source}</span>
-            <span>{formatDate(news.publishedAt.toString())}</span>
+            <span>{formatNewsDate(news.publishedAt.toString())}</span>
           </div>
         </a>
       ))}
