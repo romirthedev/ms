@@ -42,7 +42,7 @@ const AnimatedButtons = () => {
       transition={{ duration: 0.8, delay: 0.6, ease: "easeOut" }}
     >
       <a href="#demo">
-        <Button className="px-5 py-6 bg-white text-primary-700 hover:bg-blue-50 transition-all shadow-lg hover:shadow-xl hover:-translate-y-1">
+        <Button className="px-5 py-6 bg-white text-green-800 hover:bg-blue-50 transition-all shadow-lg hover:shadow-xl hover:-translate-y-1">
           <motion.span 
             initial={{ scale: 1 }}
             whileHover={{ scale: 1.05 }}
