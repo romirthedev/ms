@@ -17,6 +17,7 @@ import { browserScrapingService } from "./services/browserScrapingService";
 import { simpleBrowserService } from "./services/simpleBrowserService"; 
 import { localAnalysisService } from "./services/localAnalysisService";
 import { alphaVantageService } from "./services/alphaVantageService";
+import { getTopLosers, getDeepseekInfo } from "./services/yfinanceAdapter";
 
 // Middleware to check if user is authenticated
 const isAuthenticated = (req: Request, res: any, next: any) => {
@@ -308,6 +309,34 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Get biggest losers sorted by price change percent (negative values)
   app.get("/api/stocks/losers", async (req, res) => {
     try {
+      // Using the new YFinance data for the Biggest Losers page
+      try {
+        console.log("Fetching real-time losers data using yfinance...");
+        const industry = req.query.industry as string | undefined;
+        const yfinanceResult = await getTopLosers(industry, 50);
+        
+        if (yfinanceResult.success && yfinanceResult.data) {
+          // Get unique list of industries for filtering from the yfinance data
+          const industriesSet = new Set<string>();
+          yfinanceResult.data.forEach(stock => {
+            if (stock.industry) {
+              industriesSet.add(stock.industry);
+            }
+          });
+          const industries = Array.from(industriesSet);
+          
+          return res.status(200).json({ 
+            success: true, 
+            data: yfinanceResult.data,
+            industries: industries,
+            source: "yfinance"
+          });
+        }
+      } catch (yfinanceError) {
+        console.error("Error using yfinance, falling back to database:", yfinanceError);
+      }
+      
+      // Fallback to database if yfinance fails
       const industry = req.query.industry as string | undefined;
       let stocks = await storage.getStocks();
       
@@ -341,7 +370,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.status(200).json({ 
         success: true, 
         data: results,
-        industries: industries
+        industries: industries,
+        source: "database"
       });
     } catch (error) {
       res.status(500).json({ success: false, error: 'Failed to fetch biggest losers' });
@@ -349,6 +379,18 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
   
   // Alpha Vantage real-time price endpoints
+  
+  // Get additional information about a stock using DeepSeek integration
+  app.get("/api/deepseek/:symbol", async (req, res) => {
+    try {
+      const symbol = req.params.symbol;
+      const deepseekResult = await getDeepseekInfo(symbol);
+      return res.status(200).json(deepseekResult);
+    } catch (error) {
+      console.error("Error fetching DeepSeek info:", error);
+      return res.status(500).json({ success: false, message: "Failed to fetch DeepSeek information" });
+    }
+  });
   
   // Get real-time stock quote
   app.get("/api/realtime/quote/:symbol", async (req, res) => {
