@@ -354,51 +354,26 @@ function analyzeSentiment(text: string): { score: number, details: any } {
   };
 }
 
-// Predefined NASDAQ stocks for initial load if we don't have enough data
-const NASDAQ_STOCK_PRESETS = [
-  {"symbol": "AAPL", "companyName": "Apple Inc.", "sector": "Technology", "industry": "Consumer Electronics"},
-  {"symbol": "MSFT", "companyName": "Microsoft Corporation", "sector": "Technology", "industry": "Software Infrastructure"},
-  {"symbol": "AMZN", "companyName": "Amazon.com Inc.", "sector": "Consumer Cyclical", "industry": "Internet Retail"},
-  {"symbol": "GOOGL", "companyName": "Alphabet Inc.", "sector": "Communication Services", "industry": "Internet Content & Information"},
-  {"symbol": "META", "companyName": "Meta Platforms, Inc.", "sector": "Communication Services", "industry": "Internet Content & Information"},
-  {"symbol": "TSLA", "companyName": "Tesla, Inc.", "sector": "Consumer Cyclical", "industry": "Auto Manufacturers"},
-  {"symbol": "NVDA", "companyName": "NVIDIA Corporation", "sector": "Technology", "industry": "Semiconductors"},
-  {"symbol": "NFLX", "companyName": "Netflix, Inc.", "sector": "Communication Services", "industry": "Entertainment"},
-  {"symbol": "PYPL", "companyName": "PayPal Holdings, Inc.", "sector": "Financial Services", "industry": "Credit Services"},
-  {"symbol": "INTC", "companyName": "Intel Corporation", "sector": "Technology", "industry": "Semiconductors"},
-  {"symbol": "AMD", "companyName": "Advanced Micro Devices, Inc.", "sector": "Technology", "industry": "Semiconductors"},
-  {"symbol": "PLTR", "companyName": "Palantir Technologies Inc.", "sector": "Technology", "industry": "Software - Infrastructure"},
-  {"symbol": "CRWD", "companyName": "CrowdStrike Holdings, Inc.", "sector": "Technology", "industry": "Software - Infrastructure"},
-  {"symbol": "MRNA", "companyName": "Moderna, Inc.", "sector": "Healthcare", "industry": "Biotechnology"},
-  {"symbol": "RIVN", "companyName": "Rivian Automotive, Inc.", "sector": "Consumer Cyclical", "industry": "Auto Manufacturers"},
-  {"symbol": "CRSP", "companyName": "CRISPR Therapeutics AG", "sector": "Healthcare", "industry": "Biotechnology"},
-  {"symbol": "UPST", "companyName": "Upstart Holdings, Inc.", "sector": "Financial Services", "industry": "Credit Services"},
-  {"symbol": "SMCI", "companyName": "Super Micro Computer, Inc.", "sector": "Technology", "industry": "Computer Hardware"},
-  {"symbol": "FSLR", "companyName": "First Solar, Inc.", "sector": "Technology", "industry": "Solar"},
-  {"symbol": "BLNK", "companyName": "Blink Charging Co.", "sector": "Consumer Cyclical", "industry": "Specialty Retail"},
-  {"symbol": "DCBO", "companyName": "Docebo Inc.", "sector": "Technology", "industry": "Software - Application"},
-  {"symbol": "GEVO", "companyName": "Gevo, Inc.", "sector": "Basic Materials", "industry": "Specialty Chemicals"},
-  {"symbol": "INSG", "companyName": "Inseego Corp.", "sector": "Technology", "industry": "Communication Equipment"},
-  {"symbol": "BNGO", "companyName": "Bionano Genomics, Inc.", "sector": "Healthcare", "industry": "Diagnostics & Research"},
-  {"symbol": "ONTX", "companyName": "Onconova Therapeutics, Inc.", "sector": "Healthcare", "industry": "Biotechnology"},
-  {"symbol": "CRNC", "companyName": "Cerence Inc.", "sector": "Technology", "industry": "Software - Application"}
-];
+// Import JSON file for NASDAQ stocks
+import NASDAQ_STOCKS from '../../nasdaq_stocks.json';
 
 /**
- * Update news for all stocks in the database
+ * Update news for all stocks in the database using imported NASDAQ stocks data
  */
 async function loadNasdaqStocks(): Promise<void> {
   try {
-    console.log("Loading NASDAQ stocks from predefined list...");
+    console.log("Loading NASDAQ stocks from imported file...");
     
     // Get existing stocks to avoid duplicates
     const existingStocks = await storage.getStocks();
     const existingSymbols = new Set(existingStocks.map(stock => stock.symbol));
     
     let newStocksCount = 0;
+    const batchSize = 10; // Load stocks in smaller batches to prevent overwhelming the system
     
-    // Add stocks that don't already exist from our preset list
-    for (const stock of NASDAQ_STOCK_PRESETS) {
+    // Add stocks that don't already exist from our full NASDAQ list
+    for (let i = 0; i < NASDAQ_STOCKS.length; i++) {
+      const stock = NASDAQ_STOCKS[i];
       if (!existingSymbols.has(stock.symbol)) {
         const newStock = {
           symbol: stock.symbol,
@@ -419,12 +394,15 @@ async function loadNasdaqStocks(): Promise<void> {
         await storage.createStock(newStock);
         newStocksCount++;
         
-        // Generate initial news for this stock
-        await updateStockNews(newStock);
+        // Generate initial news for this stock, but only for a subset to avoid overwhelming
+        if (newStocksCount % batchSize === 0) {
+          await updateStockNews(newStock);
+          console.log(`Progress: Added ${newStocksCount}/${NASDAQ_STOCKS.length} new stocks`);
+        }
       }
     }
     
-    console.log(`Added ${newStocksCount} new NASDAQ stocks to the database`);
+    console.log(`Added ${newStocksCount} new NASDAQ stocks to the database (total available: ${NASDAQ_STOCKS.length})`);
   } catch (error) {
     console.error("Error loading NASDAQ stocks:", error);
   }

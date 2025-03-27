@@ -6,6 +6,7 @@ import NotFound from "@/pages/not-found";
 import HomePage from "@/pages/home/HomePage";
 import AuthPage from "@/pages/auth-page";
 import DashboardPage from "@/pages/dashboard/DashboardPage";
+import BiggestLosersPage from "@/pages/dashboard/BiggestLosersPage";
 import { ThemeProvider } from "@/components/ui/theme";
 import { AuthProvider } from "@/hooks/use-auth";
 import { ProtectedRoute } from "./lib/protected-route";
@@ -16,6 +17,7 @@ function Router() {
       <Route path="/" component={HomePage} />
       <Route path="/auth" component={AuthPage} />
       <ProtectedRoute path="/dashboard" component={DashboardPage} />
+      <ProtectedRoute path="/dashboard/losers" component={BiggestLosersPage} />
       <Route component={NotFound} />
     </Switch>
   );

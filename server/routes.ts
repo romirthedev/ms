@@ -305,6 +305,49 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
   
+  // Get biggest losers sorted by price change percent (negative values)
+  app.get("/api/stocks/losers", async (req, res) => {
+    try {
+      const industry = req.query.industry as string | undefined;
+      let stocks = await storage.getStocks();
+      
+      // Filter by industry if specified
+      if (industry && industry !== 'all') {
+        stocks = stocks.filter(stock => stock.industry === industry);
+      }
+      
+      // Sort by price change (ascending = biggest losers first)
+      stocks = stocks.sort((a, b) => 
+        (a.priceChangePercent || 0) - (b.priceChangePercent || 0)
+      );
+      
+      // Return only losers (negative price change)
+      const losers = stocks.filter(stock => 
+        (stock.priceChangePercent || 0) < 0
+      );
+      
+      // Get unique list of industries for filtering
+      const industriesSet = new Set<string>();
+      stocks.forEach(stock => {
+        if (stock.industry) {
+          industriesSet.add(stock.industry);
+        }
+      });
+      const industries = Array.from(industriesSet);
+      
+      // Return at most 50 results
+      const results = losers.slice(0, 50);
+      
+      res.status(200).json({ 
+        success: true, 
+        data: results,
+        industries: industries
+      });
+    } catch (error) {
+      res.status(500).json({ success: false, error: 'Failed to fetch biggest losers' });
+    }
+  });
+  
   // Alpha Vantage real-time price endpoints
   
   // Get real-time stock quote

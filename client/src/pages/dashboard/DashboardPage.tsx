@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { useAuth } from '@/hooks/use-auth';
+import { Link } from 'wouter';
 import { Stock, StockAnalysis, NewsItem } from '@shared/schema';
 import { 
   Card, 
@@ -34,7 +35,8 @@ import { Button } from '@/components/ui/button';
 import { 
   ChevronDown, 
   TrendingUp, 
-  ArrowUpRight, 
+  ArrowUpRight,
+  ArrowDown,
   BarChart3, 
   Search, 
   Newspaper, 
@@ -550,24 +552,33 @@ const DashboardPage = () => {
       
       <Tabs defaultValue="top-picks" value={activeTab} onValueChange={setActiveTab}>
         <div className="flex justify-between items-center mb-4">
-          <TabsList className="grid w-[400px] grid-cols-4">
-            <TabsTrigger value="top-picks" className="flex items-center">
-              <Star className="h-4 w-4 mr-2" />
-              Top Picks
-            </TabsTrigger>
-            <TabsTrigger value="all-stocks" className="flex items-center">
-              <BarChart3 className="h-4 w-4 mr-2" />
-              All Stocks
-            </TabsTrigger>
-            <TabsTrigger value="watchlist" className="flex items-center">
-              <Eye className="h-4 w-4 mr-2" />
-              Watchlist
-            </TabsTrigger>
-            <TabsTrigger value="details" disabled={!selectedStock} className="flex items-center">
-              <Search className="h-4 w-4 mr-2" />
-              Details
-            </TabsTrigger>
-          </TabsList>
+          <div className="flex flex-col sm:flex-row gap-2">
+            <TabsList className="grid w-[400px] grid-cols-4">
+              <TabsTrigger value="top-picks" className="flex items-center">
+                <Star className="h-4 w-4 mr-2" />
+                Top Picks
+              </TabsTrigger>
+              <TabsTrigger value="all-stocks" className="flex items-center">
+                <BarChart3 className="h-4 w-4 mr-2" />
+                All Stocks
+              </TabsTrigger>
+              <TabsTrigger value="watchlist" className="flex items-center">
+                <Eye className="h-4 w-4 mr-2" />
+                Watchlist
+              </TabsTrigger>
+              <TabsTrigger value="details" disabled={!selectedStock} className="flex items-center">
+                <Search className="h-4 w-4 mr-2" />
+                Details
+              </TabsTrigger>
+            </TabsList>
+            
+            <Link href="/dashboard/losers">
+              <Button variant="outline" size="sm" className="flex items-center whitespace-nowrap">
+                <ArrowDown className="h-4 w-4 mr-2 text-destructive" />
+                Biggest Losers
+              </Button>
+            </Link>
+          </div>
           
           <Button 
             variant="outline" 
