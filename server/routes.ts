@@ -1,4 +1,4 @@
-import type { Express, Request } from "express";
+import type { Express, Request, Response, NextFunction } from "express";
 import { createServer, type Server } from "http";
 import { storage } from "./storage";
 import { 
@@ -7,7 +7,8 @@ import {
   insertStockSchema,
   insertNewsItemSchema,
   insertStockAnalysisSchema,
-  insertUserWatchlistSchema
+  insertUserWatchlistSchema,
+  Stock
 } from "@shared/schema";
 import { ZodError } from "zod";
 import { fromZodError } from "zod-validation-error";
@@ -18,10 +19,9 @@ import { simpleBrowserService } from "./services/simpleBrowserService";
 import { localAnalysisService } from "./services/localAnalysisService";
 import { alphaVantageService } from "./services/alphaVantageService";
 import { getTopLosers, getDeepseekInfo } from "./services/yfinanceAdapter";
-import path from 'path';
-import { fileURLToPath } from 'url';
-import { dirname } from 'path';
-import { spawn } from 'child_process';
+import { spawn } from "child_process";
+import path from "path";
+import fs from "fs";
 
 // Middleware to check if user is authenticated
 const isAuthenticated = (req: Request, res: any, next: any) => {
@@ -136,6 +136,102 @@ export async function registerRoutes(app: Express): Promise<Server> {
       return res.status(200).json({ success: true, data: stocks });
     } catch (error) {
       return res.status(500).json({ success: false, message: "Failed to fetch stocks" });
+    }
+  });
+  
+  // Get biggest losers sorted by price change percent (negative values)
+  // NOTE: This must come BEFORE the /api/stocks/:symbol route!
+  app.get("/api/stocks/losers", async (req, res) => {
+    console.log("Received request to /api/stocks/losers");
+    try {
+      // Using the new YFinance data for the Biggest Losers page
+      try {
+        console.log("Fetching real-time losers data using simple yfinance service...");
+        const industry = req.query.industry as string | undefined;
+        
+        console.log(`Industry filter: ${industry || 'none'}`);
+        
+        // Use our simple service directly
+        console.log("About to run the yfinance service...");
+        const yfinanceResult = await runSimpleYfinanceService(industry, 50);
+        console.log("Python script result:", JSON.stringify(yfinanceResult).substring(0, 100) + '...');
+        
+        if (yfinanceResult && yfinanceResult.success && yfinanceResult.data) {
+          console.log(`Got ${yfinanceResult.data.length} stocks from yfinance service`);
+          
+          // Get unique list of industries for filtering from the yfinance data
+          const industriesSet = new Set<string>();
+          yfinanceResult.data.forEach((stock: {industry?: string}) => {
+            if (stock.industry) {
+              industriesSet.add(stock.industry);
+            }
+          });
+          const industries = yfinanceResult.industries || Array.from(industriesSet);
+          
+          return res.status(200).json({ 
+            success: true, 
+            data: yfinanceResult.data,
+            industries: industries,
+            source: "yfinance"
+          });
+        } else {
+          console.log("YFinance result was not successful:", yfinanceResult);
+        }
+      } catch (yfinanceError) {
+        console.error("Error using yfinance, falling back to database:", yfinanceError);
+      }
+      
+      // Fallback to database if yfinance fails
+      const industry = req.query.industry as string | undefined;
+      let stocks = await storage.getStocks();
+      
+      // Check if we have any stocks
+      if (!stocks || stocks.length === 0) {
+        return res.status(200).json({ 
+          success: true, 
+          data: [],
+          industries: [],
+          message: "No stock data available",
+          source: "database"
+        });
+      }
+      
+      // Filter by industry if specified
+      if (industry && industry !== 'all') {
+        stocks = stocks.filter(stock => stock.industry === industry);
+      }
+      
+      // Sort by price change (ascending = biggest losers first)
+      stocks = stocks.sort((a, b) => 
+        (a.priceChangePercent || 0) - (b.priceChangePercent || 0)
+      );
+      
+      // Return only losers (negative price change)
+      const losers = stocks.filter(stock => 
+        (stock.priceChangePercent || 0) < 0
+      );
+      
+      // Get unique list of industries for filtering
+      const industriesSet = new Set<string>();
+      stocks.forEach(stock => {
+        if (stock.industry) {
+          industriesSet.add(stock.industry);
+        }
+      });
+      const industries = Array.from(industriesSet);
+      
+      // Return at most 50 results
+      const results = losers.slice(0, 50);
+      
+      return res.status(200).json({ 
+        success: true, 
+        data: results,
+        industries: industries,
+        source: "database"
+      });
+    } catch (error) {
+      console.error("Error in /api/stocks/losers endpoint:", error);
+      return res.status(500).json({ success: false, message: 'Failed to fetch biggest losers' });
     }
   });
   
@@ -313,54 +409,89 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Helper function to run the simpleYfinanceService.py script
   async function runSimpleYfinanceService(industry: string | undefined, limit: number): Promise<any> {
     return new Promise((resolve, reject) => {
-      // Get the current directory
-      const currentDir = path.resolve();
-      const scriptPath = path.join(currentDir, 'server/services/simpleYfinanceService.py');
-      
-      console.log(`Running script at ${scriptPath}`);
-      
-      // Build command arguments
-      const args = ['get_top_losers'];
-      
-      // Add industry filter if provided
-      if (industry && industry !== 'all') {
-        args.push('--industry');
-        args.push(industry);
-      }
-      
-      // Add limit
-      args.push('--limit');
-      args.push(limit.toString());
-      
-      console.log('Running Python with args:', args);
-      
-      console.log(`Full command: python3 ${scriptPath} ${args.join(' ')}`);
-      const pythonProcess = spawn('python3', [scriptPath, ...args]);
-      
-      let dataString = '';
-      let errorString = '';
-      
-      pythonProcess.stdout.on('data', (data) => {
-        dataString += data.toString();
-      });
-      
-      pythonProcess.stderr.on('data', (data) => {
-        errorString += data.toString();
-        console.error(`Python stderr: ${data}`);
-      });
-      
-      pythonProcess.on('close', (code) => {
-        if (code !== 0) {
-          return reject(new Error(`Python process exited with code ${code}: ${errorString}`));
+      try {
+        // Get the current directory
+        const currentDir = path.resolve();
+        const scriptPath = path.join(currentDir, 'server/services/simpleYfinanceService.py');
+        
+        console.log(`Running script at ${scriptPath}`);
+        
+        // Check if file exists
+        if (!fs.existsSync(scriptPath)) {
+          console.error(`Python script not found at ${scriptPath}`);
+          return reject(new Error(`Python script not found at ${scriptPath}`));
         }
         
-        try {
-          const result = JSON.parse(dataString);
-          resolve(result);
-        } catch (err) {
-          reject(new Error(`Failed to parse Python output: ${err.message}`));
+        // Build command arguments - very important to have the command first
+        const args = [scriptPath, 'get_top_losers'];
+        
+        // Add industry filter if provided
+        if (industry && industry !== 'all') {
+          args.push('--industry');
+          args.push(industry);
         }
-      });
+        
+        // Add limit
+        args.push('--limit');
+        args.push(limit.toString());
+        
+        console.log('Running Python with args:', args);
+        console.log(`Full command: python3 ${args.join(' ')}`);
+        
+        // Execute the Python script
+        const pythonProcess = spawn('python3', args);
+        
+        let dataString = '';
+        let errorString = '';
+        
+        pythonProcess.stdout.on('data', (data) => {
+          const chunk = data.toString();
+          console.log(`Python stdout chunk: ${chunk.substring(0, 100)}...`);
+          dataString += chunk;
+        });
+        
+        pythonProcess.stderr.on('data', (data) => {
+          const chunk = data.toString();
+          console.error(`Python stderr: ${chunk}`);
+          errorString += chunk;
+        });
+        
+        pythonProcess.on('close', (code) => {
+          console.log(`Python process exited with code ${code}`);
+          
+          if (code !== 0) {
+            console.error(`Python process error: ${errorString}`);
+            return reject(new Error(`Python process exited with code ${code}: ${errorString}`));
+          }
+          
+          try {
+            // Debug the raw output
+            console.log(`Raw Python output length: ${dataString.length} characters`);
+            if (dataString.trim() === '') {
+              return reject(new Error('Python script produced no output'));
+            }
+            
+            const result = JSON.parse(dataString);
+            console.log(`Successfully parsed JSON result with ${result.data ? result.data.length : 0} items`);
+            resolve(result);
+          } catch (error: unknown) {
+            const err = error instanceof Error ? error : new Error(String(error));
+            console.error(`Failed to parse Python output: ${err.message}`);
+            console.error(`Raw output (first 200 chars): ${dataString.substring(0, 200)}`);
+            reject(new Error(`Failed to parse Python output: ${err.message}`));
+          }
+        });
+        
+        // Handle process errors
+        pythonProcess.on('error', (error: Error) => {
+          console.error(`Failed to start Python process: ${error.message}`);
+          reject(new Error(`Failed to start Python process: ${error.message}`));
+        });
+      } catch (error: unknown) {
+        const err = error instanceof Error ? error : new Error(String(error));
+        console.error(`Error in runSimpleYfinanceService: ${err.message}`);
+        reject(err);
+      }
     });
   }
 
@@ -385,7 +516,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
           console.log(files);
           return reject(new Error(`Python script not found at ${scriptPath}`));
         }
-      } catch (err) {
+      } catch (error: unknown) {
+        const err = error instanceof Error ? error : new Error(String(error));
         console.error(`Error checking for script file:`, err);
       }
       
@@ -420,95 +552,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
         try {
           const result = JSON.parse(dataString);
           resolve(result);
-        } catch (err) {
+        } catch (error: unknown) {
           reject(new Error(`Failed to parse Python output: ${dataString.substring(0, 200)}...`));
         }
       });
     });
   }
 
-  // Get biggest losers sorted by price change percent (negative values)
-  app.get("/api/stocks/losers", async (req, res) => {
-    try {
-      // Using the new YFinance data for the Biggest Losers page
-      try {
-        console.log("Fetching real-time losers data using simple yfinance service...");
-        const industry = req.query.industry as string | undefined;
-        
-        console.log(`Industry filter: ${industry || 'none'}`);
-        
-        // Use our simple service directly
-        console.log("About to run the yfinance service...");
-        const yfinanceResult = await runSimpleYfinanceService(industry, 50);
-        console.log("Python script result:", JSON.stringify(yfinanceResult).substring(0, 100) + '...');
-        
-        if (yfinanceResult.success && yfinanceResult.data) {
-          console.log(`Got ${yfinanceResult.data.length} stocks from yfinance service`);
-          
-          // Get unique list of industries for filtering from the yfinance data
-          const industriesSet = new Set<string>();
-          yfinanceResult.data.forEach(stock => {
-            if (stock.industry) {
-              industriesSet.add(stock.industry);
-            }
-          });
-          const industries = yfinanceResult.industries || Array.from(industriesSet);
-          
-          return res.status(200).json({ 
-            success: true, 
-            data: yfinanceResult.data,
-            industries: industries,
-            source: "yfinance"
-          });
-        } else {
-          console.log("YFinance result was not successful:", yfinanceResult);
-        }
-      } catch (yfinanceError) {
-        console.error("Error using yfinance, falling back to database:", yfinanceError);
-      }
-      
-      // Fallback to database if yfinance fails
-      const industry = req.query.industry as string | undefined;
-      let stocks = await storage.getStocks();
-      
-      // Filter by industry if specified
-      if (industry && industry !== 'all') {
-        stocks = stocks.filter(stock => stock.industry === industry);
-      }
-      
-      // Sort by price change (ascending = biggest losers first)
-      stocks = stocks.sort((a, b) => 
-        (a.priceChangePercent || 0) - (b.priceChangePercent || 0)
-      );
-      
-      // Return only losers (negative price change)
-      const losers = stocks.filter(stock => 
-        (stock.priceChangePercent || 0) < 0
-      );
-      
-      // Get unique list of industries for filtering
-      const industriesSet = new Set<string>();
-      stocks.forEach(stock => {
-        if (stock.industry) {
-          industriesSet.add(stock.industry);
-        }
-      });
-      const industries = Array.from(industriesSet);
-      
-      // Return at most 50 results
-      const results = losers.slice(0, 50);
-      
-      res.status(200).json({ 
-        success: true, 
-        data: results,
-        industries: industries,
-        source: "database"
-      });
-    } catch (error) {
-      res.status(500).json({ success: false, error: 'Failed to fetch biggest losers' });
-    }
-  });
-  
   // Alpha Vantage real-time price endpoints
   
   // Get additional information about a stock using DeepSeek integration
