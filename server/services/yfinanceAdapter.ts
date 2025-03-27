@@ -16,7 +16,7 @@ export async function getTopLosers(industry: string | null = null, limit: number
   return new Promise((resolve, reject) => {
     // Build command arguments
     const args = [
-      path.join(__dirname, 'yfinanceService.py'),
+      path.join(__dirname, 'simpleYfinanceService.py'),
       'get_top_losers'
     ];
     
