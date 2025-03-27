@@ -253,7 +253,7 @@ export class MemStorage implements IStorage {
   }
   
   async getTopRatedStockAnalyses(limit: number = 5): Promise<StockAnalysis[]> {
-    return Array.from(this.stockAnalyses.values())
+    const analyses = Array.from(this.stockAnalyses.values())
       .filter(analysis => analysis.predictedMovementDirection === 'up')
       .sort((a, b) => {
         // Sort by potential rating and confidence score
@@ -263,6 +263,16 @@ export class MemStorage implements IStorage {
         return b.confidenceScore - a.confidenceScore;
       })
       .slice(0, limit);
+    
+    // If no analyses are found, return some default ones to ensure UI always has data
+    if (analyses.length === 0) {
+      // Find any analyses we can use
+      return Array.from(this.stockAnalyses.values())
+        .sort((a, b) => b.potentialRating - a.potentialRating)
+        .slice(0, limit);
+    }
+    
+    return analyses;
   }
   
   async createStockAnalysis(insertAnalysis: InsertStockAnalysis): Promise<StockAnalysis> {
@@ -341,8 +351,9 @@ export class MemStorage implements IStorage {
   
   // Initialize with sample data
   private initializeSampleData() {
-    // Sample stocks
+    // Sample stocks - Representing a wide range of NASDAQ stocks including big tech and smaller companies
     const sampleStocks: InsertStock[] = [
+      // Big Tech Companies
       {
         symbol: 'AAPL',
         companyName: 'Apple Inc.',
@@ -417,6 +428,272 @@ export class MemStorage implements IStorage {
         description: 'Meta Platforms, Inc. develops products that enable people to connect and share with friends and family through mobile devices, personal computers, virtual reality headsets, and in-home devices.',
         website: 'https://about.meta.com',
         competitors: ['GOOGL', 'SNAP', 'PINS']
+      },
+      
+      // Mid-sized tech companies
+      {
+        symbol: 'AMD',
+        companyName: 'Advanced Micro Devices, Inc.',
+        sector: 'Technology',
+        industry: 'Semiconductors',
+        currentPrice: 178.25,
+        previousClose: 176.82,
+        priceChange: 1.43,
+        priceChangePercent: 0.81,
+        marketCap: 288000000000,
+        logoUrl: 'https://logo.clearbit.com/amd.com',
+        description: 'Advanced Micro Devices, Inc. designs, develops, and sells microprocessors, chipsets, GPUs, and other semiconductor products.',
+        website: 'https://www.amd.com',
+        competitors: ['INTC', 'NVDA', 'TSM']
+      },
+      {
+        symbol: 'PYPL',
+        companyName: 'PayPal Holdings, Inc.',
+        sector: 'Financial Services',
+        industry: 'Credit Services',
+        currentPrice: 62.42,
+        previousClose: 62.83,
+        priceChange: -0.41,
+        priceChangePercent: -0.65,
+        marketCap: 66500000000,
+        logoUrl: 'https://logo.clearbit.com/paypal.com',
+        description: 'PayPal Holdings, Inc. operates as a technology platform and digital payments company that facilitates digital and mobile payments on behalf of consumers and merchants worldwide.',
+        website: 'https://www.paypal.com',
+        competitors: ['SQ', 'V', 'MA']
+      },
+      
+      // Smaller tech companies with potential
+      {
+        symbol: 'CRWD',
+        companyName: 'CrowdStrike Holdings, Inc.',
+        sector: 'Technology',
+        industry: 'Software—Infrastructure',
+        currentPrice: 319.43,
+        previousClose: 315.64,
+        priceChange: 3.79,
+        priceChangePercent: 1.20,
+        marketCap: 76900000000,
+        logoUrl: 'https://logo.clearbit.com/crowdstrike.com',
+        description: 'CrowdStrike Holdings, Inc. provides cloud-delivered protection across endpoints and cloud workloads, identity, and data.',
+        website: 'https://www.crowdstrike.com',
+        competitors: ['PANW', 'FTNT', 'MSFT']
+      },
+      {
+        symbol: 'PLTR',
+        companyName: 'Palantir Technologies Inc.',
+        sector: 'Technology',
+        industry: 'Software—Infrastructure',
+        currentPrice: 24.78,
+        previousClose: 23.95,
+        priceChange: 0.83,
+        priceChangePercent: 3.47,
+        marketCap: 54500000000,
+        logoUrl: 'https://logo.clearbit.com/palantir.com',
+        description: 'Palantir Technologies Inc. builds and deploys software platforms for the intelligence community to assist in counterterrorism investigations and operations.',
+        website: 'https://www.palantir.com',
+        competitors: ['SNOW', 'MSFT', 'ORCL']
+      },
+      
+      // Biotech and Pharmaceutical
+      {
+        symbol: 'MRNA',
+        companyName: 'Moderna, Inc.',
+        sector: 'Healthcare',
+        industry: 'Biotechnology',
+        currentPrice: 109.93,
+        previousClose: 108.57,
+        priceChange: 1.36,
+        priceChangePercent: 1.25,
+        marketCap: 42000000000,
+        logoUrl: 'https://logo.clearbit.com/modernatx.com',
+        description: 'Moderna, Inc. discovers, develops, and commercializes messenger RNA therapeutics and vaccines for various infectious diseases and oncology indications.',
+        website: 'https://www.modernatx.com',
+        competitors: ['PFE', 'BNTX', 'JNJ']
+      },
+      {
+        symbol: 'CRSP',
+        companyName: 'CRISPR Therapeutics AG',
+        sector: 'Healthcare',
+        industry: 'Biotechnology',
+        currentPrice: 56.79,
+        previousClose: 55.42,
+        priceChange: 1.37,
+        priceChangePercent: 2.47,
+        marketCap: 4500000000,
+        logoUrl: 'https://logo.clearbit.com/crisprtx.com',
+        description: 'CRISPR Therapeutics AG, a gene editing company, develops transformative gene-based medicines for patients with serious diseases.',
+        website: 'https://www.crisprtx.com',
+        competitors: ['EDIT', 'NTLA', 'BEAM']
+      },
+      
+      // Electric Vehicle and Clean Energy
+      {
+        symbol: 'RIVN',
+        companyName: 'Rivian Automotive, Inc.',
+        sector: 'Consumer Cyclical',
+        industry: 'Auto Manufacturers',
+        currentPrice: 10.89,
+        previousClose: 10.63,
+        priceChange: 0.26,
+        priceChangePercent: 2.45,
+        marketCap: 10700000000,
+        logoUrl: 'https://logo.clearbit.com/rivian.com',
+        description: 'Rivian Automotive, Inc. designs, develops, and manufactures electric adventure vehicles, including electric pickup trucks and SUVs.',
+        website: 'https://www.rivian.com',
+        competitors: ['TSLA', 'F', 'GM']
+      },
+      {
+        symbol: 'FSLR',
+        companyName: 'First Solar, Inc.',
+        sector: 'Technology',
+        industry: 'Solar',
+        currentPrice: 233.79,
+        previousClose: 229.87,
+        priceChange: 3.92,
+        priceChangePercent: 1.70,
+        marketCap: 25000000000,
+        logoUrl: 'https://logo.clearbit.com/firstsolar.com',
+        description: 'First Solar, Inc. provides photovoltaic solar energy solutions worldwide, manufacturing and selling PV solar modules.',
+        website: 'https://www.firstsolar.com',
+        competitors: ['ENPH', 'SEDG', 'CSIQ']
+      },
+      
+      // Small Caps with Breakthrough Potential
+      {
+        symbol: 'SMCI',
+        companyName: 'Super Micro Computer, Inc.',
+        sector: 'Technology',
+        industry: 'Computer Hardware',
+        currentPrice: 827.45,
+        previousClose: 798.23,
+        priceChange: 29.22,
+        priceChangePercent: 3.66,
+        marketCap: 46500000000,
+        logoUrl: 'https://logo.clearbit.com/supermicro.com',
+        description: 'Super Micro Computer, Inc. develops and manufactures high-performance server and storage solutions based on modular and open architecture.',
+        website: 'https://www.supermicro.com',
+        competitors: ['HPE', 'DELL', 'NTAP']
+      },
+      {
+        symbol: 'UPST',
+        companyName: 'Upstart Holdings, Inc.',
+        sector: 'Financial Services',
+        industry: 'Credit Services',
+        currentPrice: 25.82,
+        previousClose: 25.11,
+        priceChange: 0.71,
+        priceChangePercent: 2.83,
+        marketCap: 2200000000,
+        logoUrl: 'https://logo.clearbit.com/upstart.com',
+        description: 'Upstart Holdings, Inc. operates a cloud-based artificial intelligence lending platform in the United States.',
+        website: 'https://www.upstart.com',
+        competitors: ['PYPL', 'SQ', 'SOFI']
+      },
+      // Adding more small/micro-cap companies with innovative technologies
+      {
+        symbol: 'BLNK',
+        companyName: 'Blink Charging Co.',
+        sector: 'Consumer Cyclical',
+        industry: 'Specialty Retail',
+        currentPrice: 3.15,
+        previousClose: 3.08,
+        priceChange: 0.07,
+        priceChangePercent: 2.27,
+        marketCap: 265000000,
+        logoUrl: 'https://logo.clearbit.com/blinkcharging.com',
+        description: 'Blink Charging Co. owns, operates, and provides electric vehicle charging equipment and networked EV charging services.',
+        website: 'https://www.blinkcharging.com',
+        competitors: ['CHPT', 'EVGO', 'TSLA']
+      },
+      {
+        symbol: 'DCBO',
+        companyName: 'Docebo Inc.',
+        sector: 'Technology',
+        industry: 'Software—Application',
+        currentPrice: 45.31,
+        previousClose: 44.85,
+        priceChange: 0.46,
+        priceChangePercent: 1.03,
+        marketCap: 1390000000,
+        logoUrl: 'https://logo.clearbit.com/docebo.com',
+        description: 'Docebo Inc. provides a cloud-based learning management system to train internal and external workforces, partners, and customers.',
+        website: 'https://www.docebo.com',
+        competitors: ['WDAY', 'SAP', 'MSFT']
+      },
+      {
+        symbol: 'GEVO',
+        companyName: 'Gevo, Inc.',
+        sector: 'Basic Materials',
+        industry: 'Specialty Chemicals',
+        currentPrice: 0.78,
+        previousClose: 0.76,
+        priceChange: 0.02,
+        priceChangePercent: 2.63,
+        marketCap: 184000000,
+        logoUrl: 'https://logo.clearbit.com/gevo.com',
+        description: 'Gevo, Inc. is a renewable chemicals and advanced biofuels company that transforms renewable energy into energy-dense liquid hydrocarbons.',
+        website: 'https://www.gevo.com',
+        competitors: ['AMRS', 'ADM', 'REGI']
+      },
+      {
+        symbol: 'INSG',
+        companyName: 'Inseego Corp.',
+        sector: 'Technology',
+        industry: 'Communication Equipment',
+        currentPrice: 2.25,
+        previousClose: 2.22,
+        priceChange: 0.03,
+        priceChangePercent: 1.35,
+        marketCap: 265000000,
+        logoUrl: 'https://logo.clearbit.com/inseego.com',
+        description: 'Inseego Corp. provides wireless solutions for IoT, mobile, and fixed networks.',
+        website: 'https://www.inseego.com',
+        competitors: ['SWIR', 'CALX', 'CIEN']
+      },
+      {
+        symbol: 'ONTX',
+        companyName: 'Onconova Therapeutics, Inc.',
+        sector: 'Healthcare',
+        industry: 'Biotechnology',
+        currentPrice: 0.60,
+        previousClose: 0.59,
+        priceChange: 0.01,
+        priceChangePercent: 1.69,
+        marketCap: 12500000,
+        logoUrl: 'https://logo.clearbit.com/onconova.com',
+        description: 'Onconova Therapeutics, Inc. is a biopharmaceutical company developing novel therapies to address cancer.',
+        website: 'https://www.onconova.com',
+        competitors: ['AMGN', 'GILD', 'BIIB']
+      },
+      {
+        symbol: 'BNGO',
+        companyName: 'Bionano Genomics, Inc.',
+        sector: 'Healthcare',
+        industry: 'Diagnostics & Research',
+        currentPrice: 1.05,
+        previousClose: 1.01,
+        priceChange: 0.04,
+        priceChangePercent: 3.96,
+        marketCap: 39000000,
+        logoUrl: 'https://logo.clearbit.com/bionanogenomics.com',
+        description: 'Bionano Genomics, Inc. provides genome analysis software solutions for genomics researchers and clinical laboratories.',
+        website: 'https://www.bionanogenomics.com',
+        competitors: ['ILMN', 'PACB', 'DNA']
+      },
+      {
+        symbol: 'CRNC',
+        companyName: 'Cerence Inc.',
+        sector: 'Technology',
+        industry: 'Software—Application',
+        currentPrice: 13.21,
+        previousClose: 12.84,
+        priceChange: 0.37,
+        priceChangePercent: 2.88,
+        marketCap: 537000000,
+        logoUrl: 'https://logo.clearbit.com/cerence.com',
+        description: 'Cerence Inc. provides AI-powered virtual assistant solutions for the mobility/transportation market.',
+        website: 'https://www.cerence.com',
+        competitors: ['NUAN', 'MSFT', 'GOOGL']
       }
     ];
     
@@ -433,6 +710,7 @@ export class MemStorage implements IStorage {
     twoDaysAgo.setDate(twoDaysAgo.getDate() - 2);
     
     const sampleNews: InsertNewsItem[] = [
+      // Big Tech News
       {
         title: 'Apple Announces Breakthrough AI Features for Next iPhone',
         content: 'Apple today unveiled a suite of groundbreaking AI features that will be integrated into the next generation iPhone, expected to launch this fall. The new features leverage on-device machine learning to enhance photography, voice recognition, and battery optimization.',
@@ -487,6 +765,126 @@ export class MemStorage implements IStorage {
         stockSymbols: ['META'],
         sentiment: 0.88,
         sentimentDetails: { positive: 0.88, negative: 0.04, neutral: 0.08 }
+      },
+      
+      // Mid-sized tech news
+      {
+        title: 'AMD\'s New CPU Architecture Shows 25% Performance Gain in Early Benchmarks',
+        content: 'AMD\'s upcoming CPU architecture has demonstrated a 25% performance improvement in early benchmarks compared to current generation chips. The new design is expected to significantly strengthen AMD\'s competitive position against Intel.',
+        url: 'https://example.com/amd-cpu-benchmarks',
+        imageUrl: 'https://example.com/amd-cpu.jpg',
+        source: 'Processor Review',
+        publishedAt: new Date(now.getTime() - 4800000), // 1.33 hours ago
+        stockSymbols: ['AMD', 'INTC'],
+        sentiment: 0.84,
+        sentimentDetails: { positive: 0.84, negative: 0.05, neutral: 0.11 }
+      },
+      {
+        title: 'PayPal Introduces AI-Powered Fraud Detection System with 40% Higher Accuracy',
+        content: 'PayPal has rolled out a new AI-powered fraud detection system that reportedly offers 40% higher accuracy than its previous system. Early data suggests the technology could save the company hundreds of millions in fraud prevention costs.',
+        url: 'https://example.com/paypal-ai-fraud',
+        imageUrl: 'https://example.com/paypal-ai.jpg',
+        source: 'Fintech Daily',
+        publishedAt: yesterday,
+        stockSymbols: ['PYPL'],
+        sentiment: 0.88,
+        sentimentDetails: { positive: 0.88, negative: 0.04, neutral: 0.08 }
+      },
+      
+      // Smaller tech companies
+      {
+        title: 'CrowdStrike Uncovers Major Security Vulnerability Affecting 40% of Fortune 500 Companies',
+        content: 'Cybersecurity leader CrowdStrike has identified a previously unknown security vulnerability that potentially affects up to 40% of Fortune 500 companies. The company has already developed and released mitigation tools to its clients.',
+        url: 'https://example.com/crowdstrike-vulnerability',
+        imageUrl: 'https://example.com/crowdstrike-vuln.jpg',
+        source: 'Cyber Security Today',
+        publishedAt: new Date(now.getTime() - 12000000), // 3.33 hours ago
+        stockSymbols: ['CRWD'],
+        sentiment: 0.76,
+        sentimentDetails: { positive: 0.76, negative: 0.12, neutral: 0.12 }
+      },
+      {
+        title: 'Palantir Technologies Signs $200M Deal with US Government for AI-Enhanced Security Platform',
+        content: 'Palantir Technologies has secured a $200 million contract with the US government to provide an AI-enhanced security platform. This represents one of the company\'s largest government contracts to date.',
+        url: 'https://example.com/palantir-government-deal',
+        imageUrl: 'https://example.com/palantir-deal.jpg',
+        source: 'Government Technology',
+        publishedAt: yesterday,
+        stockSymbols: ['PLTR'],
+        sentiment: 0.91,
+        sentimentDetails: { positive: 0.91, negative: 0.02, neutral: 0.07 }
+      },
+      
+      // Biotech and Pharmaceutical
+      {
+        title: 'Moderna\'s mRNA Cancer Vaccine Shows Promising Results in Phase 2 Trials',
+        content: 'Moderna has reported promising results from its Phase 2 trials of an mRNA-based cancer vaccine. The treatment showed a 57% reduction in cancer recurrence when used in combination with existing immunotherapy treatments.',
+        url: 'https://example.com/moderna-cancer-vaccine',
+        imageUrl: 'https://example.com/moderna-trial.jpg',
+        source: 'Biotech Review',
+        publishedAt: new Date(now.getTime() - 36000000), // 10 hours ago
+        stockSymbols: ['MRNA'],
+        sentiment: 0.93,
+        sentimentDetails: { positive: 0.93, negative: 0.01, neutral: 0.06 }
+      },
+      {
+        title: 'CRISPR Therapeutics Receives FDA Breakthrough Therapy Designation for Sickle Cell Treatment',
+        content: 'The FDA has granted Breakthrough Therapy designation to CRISPR Therapeutics\' gene-editing treatment for sickle cell disease. This regulatory milestone could accelerate the therapy\'s path to market approval.',
+        url: 'https://example.com/crispr-fda-designation',
+        imageUrl: 'https://example.com/crispr-fda.jpg',
+        source: 'Medical Innovation',
+        publishedAt: twoDaysAgo,
+        stockSymbols: ['CRSP'],
+        sentiment: 0.89,
+        sentimentDetails: { positive: 0.89, negative: 0.04, neutral: 0.07 }
+      },
+      
+      // EVs and Clean Energy
+      {
+        title: 'Rivian Announces New Manufacturing Process Reducing Production Costs by 20%',
+        content: 'Electric vehicle maker Rivian has unveiled a new manufacturing process that reportedly reduces production costs by 20%. This innovation could help the company reach profitability sooner than analysts had previously estimated.',
+        url: 'https://example.com/rivian-manufacturing',
+        imageUrl: 'https://example.com/rivian-production.jpg',
+        source: 'EV Manufacturing Today',
+        publishedAt: yesterday,
+        stockSymbols: ['RIVN'],
+        sentiment: 0.86,
+        sentimentDetails: { positive: 0.86, negative: 0.03, neutral: 0.11 }
+      },
+      {
+        title: 'First Solar Secures Record 10GW Panel Order as US Clean Energy Transition Accelerates',
+        content: 'First Solar has announced a record 10GW panel order from a consortium of US energy companies, representing over $4 billion in potential revenue. This marks one of the largest solar panel orders in the industry\'s history.',
+        url: 'https://example.com/first-solar-record-order',
+        imageUrl: 'https://example.com/first-solar-order.jpg',
+        source: 'Renewable Energy Report',
+        publishedAt: new Date(now.getTime() - 86400000), // 1 day ago
+        stockSymbols: ['FSLR'],
+        sentiment: 0.94,
+        sentimentDetails: { positive: 0.94, negative: 0.01, neutral: 0.05 }
+      },
+      
+      // Small Caps with Breakthroughs
+      {
+        title: 'Super Micro Computer Reports 300% Increase in AI Server Demand',
+        content: 'Super Micro Computer has reported a 300% year-over-year increase in demand for its AI-optimized server solutions. The company has also announced an expansion of manufacturing capacity to meet the growing demand.',
+        url: 'https://example.com/supermicro-ai-demand',
+        imageUrl: 'https://example.com/supermicro-servers.jpg',
+        source: 'Data Center News',
+        publishedAt: new Date(now.getTime() - 172800000), // 2 days ago
+        stockSymbols: ['SMCI'],
+        sentiment: 0.92,
+        sentimentDetails: { positive: 0.92, negative: 0.02, neutral: 0.06 }
+      },
+      {
+        title: 'Upstart\'s AI Lending Platform Shows 31% Higher Approval Rates with Lower Default Risk',
+        content: 'Upstart has released data showing its AI lending platform achieves 31% higher approval rates while maintaining or lowering default risk compared to traditional lending models. This performance could accelerate partner bank adoption.',
+        url: 'https://example.com/upstart-ai-results',
+        imageUrl: 'https://example.com/upstart-lending.jpg',
+        source: 'FinTech Breakthrough',
+        publishedAt: yesterday,
+        stockSymbols: ['UPST'],
+        sentiment: 0.85,
+        sentimentDetails: { positive: 0.85, negative: 0.05, neutral: 0.1 }
       }
     ];
     
@@ -497,6 +895,7 @@ export class MemStorage implements IStorage {
     
     // Sample stock analyses
     const sampleAnalyses: InsertStockAnalysis[] = [
+      // Big Tech Companies
       {
         stockId: 1, // AAPL
         stockSymbol: 'AAPL',
@@ -608,6 +1007,246 @@ export class MemStorage implements IStorage {
         confidenceScore: 0.84,
         isBreakthrough: true,
         analysisDate: new Date(now.getTime() - 7200000) // 2 hours ago
+      },
+      
+      // Mid-sized tech companies
+      {
+        stockId: 6, // AMD
+        stockSymbol: 'AMD',
+        companyName: 'Advanced Micro Devices, Inc.',
+        potentialRating: 9,
+        breakingNewsCount: 2,
+        positiveNewsCount: 5,
+        negativeNewsCount: 1,
+        summaryText: "AMD's new CPU architecture represents a significant leap in performance that could drive market share gains in both consumer and server markets. The 25% performance improvement vastly exceeds analyst expectations of 10-15%.",
+        evidencePoints: [
+          'New CPU architecture shows 25% performance gain in early benchmarks',
+          'Power efficiency improvements reported at 30% better than previous generation',
+          'Potential to gain 3-5% server market share from Intel over next 12 months',
+          'Manufacturing yields reportedly exceeding targets by 15%',
+          'New design specifically optimized for AI workloads, a fast-growing segment'
+        ],
+        relatedNewsIds: [6],
+        predictedMovementDirection: 'up',
+        predictedMovementPercent: 9.8,
+        confidenceScore: 0.86,
+        isBreakthrough: true,
+        analysisDate: new Date(now.getTime() - 4800000) // 1.33 hours ago
+      },
+      {
+        stockId: 7, // PYPL
+        stockSymbol: 'PYPL',
+        companyName: 'PayPal Holdings, Inc.',
+        potentialRating: 8,
+        breakingNewsCount: 1,
+        positiveNewsCount: 3,
+        negativeNewsCount: 0,
+        summaryText: "PayPal's new AI-powered fraud detection system could significantly reduce fraud losses while increasing approval rates. This technology addresses a key pain point in digital payments and could provide a competitive edge.",
+        evidencePoints: [
+          'AI fraud detection system shows 40% higher accuracy than previous system',
+          'Potential annual savings of $200-300 million from reduced fraud losses',
+          'Higher transaction approval rates will improve customer satisfaction metrics',
+          'System developed internally, demonstrating strong AI capabilities',
+          'Early merchant adoption exceeding company projections by 25%'
+        ],
+        relatedNewsIds: [7],
+        predictedMovementDirection: 'up',
+        predictedMovementPercent: 7.5,
+        confidenceScore: 0.83,
+        isBreakthrough: false,
+        analysisDate: yesterday
+      },
+      
+      // Smaller tech companies
+      {
+        stockId: 8, // CRWD
+        stockSymbol: 'CRWD',
+        companyName: 'CrowdStrike Holdings, Inc.',
+        potentialRating: 10,
+        breakingNewsCount: 3,
+        positiveNewsCount: 4,
+        negativeNewsCount: 0,
+        summaryText: "CrowdStrike's discovery of a major security vulnerability affecting Fortune 500 companies positions it as a leader in cutting-edge threat detection. The rapid development of mitigation tools demonstrates technical superiority and could accelerate customer acquisition.",
+        evidencePoints: [
+          'Discovered critical vulnerability affecting 40% of Fortune 500 companies',
+          'Already developed and deployed mitigation tools to existing clients',
+          'Published detailed technical analysis establishing thought leadership',
+          'Potential to convert non-customers who are affected by the vulnerability',
+          'Media coverage has significantly increased brand visibility in enterprise space'
+        ],
+        relatedNewsIds: [8],
+        predictedMovementDirection: 'up',
+        predictedMovementPercent: 13.6,
+        confidenceScore: 0.89,
+        isBreakthrough: true,
+        analysisDate: new Date(now.getTime() - 12000000) // 3.33 hours ago
+      },
+      {
+        stockId: 9, // PLTR
+        stockSymbol: 'PLTR',
+        companyName: 'Palantir Technologies Inc.',
+        potentialRating: 9,
+        breakingNewsCount: 2,
+        positiveNewsCount: 4,
+        negativeNewsCount: 1,
+        summaryText: "Palantir's $200M government contract represents a major win and validates its AI-enhanced security platform. This deal could open the door to additional government contracts and demonstrates the company's growing influence in national security.",
+        evidencePoints: [
+          'Secured $200M contract with US government for AI-enhanced security platform',
+          'Contract represents 20% increase over previous largest government deal',
+          'Multi-year agreement provides stable, recurring revenue stream',
+          'Potential for expansion into additional government departments',
+          'Demonstrates competitive advantage in highly regulated, security-sensitive applications'
+        ],
+        relatedNewsIds: [9],
+        predictedMovementDirection: 'up',
+        predictedMovementPercent: 11.2,
+        confidenceScore: 0.87,
+        isBreakthrough: false,
+        analysisDate: yesterday
+      },
+      
+      // Biotech and Pharmaceutical
+      {
+        stockId: 10, // MRNA
+        stockSymbol: 'MRNA',
+        companyName: 'Moderna, Inc.',
+        potentialRating: 10,
+        breakingNewsCount: 3,
+        positiveNewsCount: 6,
+        negativeNewsCount: 1,
+        summaryText: "Moderna's mRNA cancer vaccine showing 57% reduction in cancer recurrence represents a potential breakthrough in oncology. If confirmed in Phase 3 trials, this could establish an entirely new product category with massive market potential.",
+        evidencePoints: [
+          'Phase 2 trial shows 57% reduction in cancer recurrence when combined with immunotherapy',
+          'Safety profile appears favorable with manageable side effects',
+          'Potential addressable market estimated at $15-20 billion annually',
+          'Technology potentially applicable to multiple cancer types',
+          'Patent protection secured through 2038 for core technology'
+        ],
+        relatedNewsIds: [10],
+        predictedMovementDirection: 'up',
+        predictedMovementPercent: 18.7,
+        confidenceScore: 0.92,
+        isBreakthrough: true,
+        analysisDate: new Date(now.getTime() - 36000000) // 10 hours ago
+      },
+      {
+        stockId: 11, // CRSP
+        stockSymbol: 'CRSP',
+        companyName: 'CRISPR Therapeutics AG',
+        potentialRating: 9,
+        breakingNewsCount: 2,
+        positiveNewsCount: 5,
+        negativeNewsCount: 1,
+        summaryText: "FDA's Breakthrough Therapy designation for CRISPR's sickle cell treatment is a significant regulatory milestone that could accelerate approval. This treatment addresses a serious genetic disease with limited current treatment options.",
+        evidencePoints: [
+          'Received FDA Breakthrough Therapy designation for sickle cell treatment',
+          'Designation could accelerate approval timeline by 12-18 months',
+          'Treatment addresses genetic root cause of disease, not just symptoms',
+          'Potential to be first approved CRISPR-based treatment for genetic disease',
+          'Preliminary data shows 97% reduction in vaso-occlusive crises in patients'
+        ],
+        relatedNewsIds: [11],
+        predictedMovementDirection: 'up',
+        predictedMovementPercent: 14.3,
+        confidenceScore: 0.88,
+        isBreakthrough: true,
+        analysisDate: twoDaysAgo
+      },
+      
+      // Electric Vehicle and Clean Energy
+      {
+        stockId: 12, // RIVN
+        stockSymbol: 'RIVN',
+        companyName: 'Rivian Automotive, Inc.',
+        potentialRating: 8,
+        breakingNewsCount: 1,
+        positiveNewsCount: 3,
+        negativeNewsCount: 1,
+        summaryText: "Rivian's new manufacturing process reducing production costs by 20% addresses a critical challenge for the company: reaching profitability. This cost reduction could significantly improve gross margins and accelerate the path to positive cash flow.",
+        evidencePoints: [
+          'New manufacturing process reduces production costs by 20%',
+          'Implementation already begun at main manufacturing facility',
+          'Would improve gross margin by estimated 15 percentage points',
+          'Could accelerate profitability timeline by 2-3 quarters',
+          'Technology appears proprietary with patent protection'
+        ],
+        relatedNewsIds: [12],
+        predictedMovementDirection: 'up',
+        predictedMovementPercent: 9.1,
+        confidenceScore: 0.84,
+        isBreakthrough: false,
+        analysisDate: yesterday
+      },
+      {
+        stockId: 13, // FSLR
+        stockSymbol: 'FSLR',
+        companyName: 'First Solar, Inc.',
+        potentialRating: 10,
+        breakingNewsCount: 3,
+        positiveNewsCount: 5,
+        negativeNewsCount: 0,
+        summaryText: "First Solar's record 10GW panel order worth potentially $4 billion represents a transformative development. This order significantly expands backlog, provides long-term revenue visibility, and validates the company's thin-film solar technology at massive scale.",
+        evidencePoints: [
+          'Secured record 10GW panel order from US energy consortium',
+          'Order value estimated at over $4 billion in potential revenue',
+          'Extends order backlog through 2026, providing clear revenue visibility',
+          'Demonstrates competitive advantage of US-based manufacturing under IRA incentives',
+          'Order size will drive further manufacturing economies of scale'
+        ],
+        relatedNewsIds: [13],
+        predictedMovementDirection: 'up',
+        predictedMovementPercent: 16.5,
+        confidenceScore: 0.93,
+        isBreakthrough: true,
+        analysisDate: new Date(now.getTime() - 86400000) // 1 day ago
+      },
+      
+      // Small Caps with Breakthrough Potential
+      {
+        stockId: 14, // SMCI
+        stockSymbol: 'SMCI',
+        companyName: 'Super Micro Computer, Inc.',
+        potentialRating: 10,
+        breakingNewsCount: 3,
+        positiveNewsCount: 5,
+        negativeNewsCount: 0,
+        summaryText: "Super Micro's 300% increase in AI server demand indicates the company is capturing significant market share in one of tech's fastest-growing segments. The expansion of manufacturing capacity suggests management is preparing for sustained high demand.",
+        evidencePoints: [
+          'Reported 300% year-over-year increase in AI-optimized server demand',
+          'Announced expansion of manufacturing capacity to meet demand',
+          'Current order backlog exceeds two quarters of production capacity',
+          'New facility optimized for liquid-cooled server manufacturing, a premium segment',
+          'Product portfolio specifically designed for latest AI accelerator chips'
+        ],
+        relatedNewsIds: [14],
+        predictedMovementDirection: 'up',
+        predictedMovementPercent: 22.4,
+        confidenceScore: 0.94,
+        isBreakthrough: true,
+        analysisDate: new Date(now.getTime() - 172800000) // 2 days ago
+      },
+      {
+        stockId: 15, // UPST
+        stockSymbol: 'UPST',
+        companyName: 'Upstart Holdings, Inc.',
+        potentialRating: 9,
+        breakingNewsCount: 2,
+        positiveNewsCount: 4,
+        negativeNewsCount: 1,
+        summaryText: "Upstart's AI lending platform achieving 31% higher approval rates while maintaining or reducing default risk represents a powerful validation of its technology. This performance could accelerate bank partner adoption and significantly expand loan origination volume.",
+        evidencePoints: [
+          'AI lending platform achieves 31% higher approval rates without increasing default risk',
+          'Performance substantially exceeds industry-standard credit scoring models',
+          'Technology works across multiple loan categories (personal, auto, small business)',
+          'Three new bank partners added in last 60 days based on these results',
+          'Total addressable market estimated at over $1 trillion in annual loan originations'
+        ],
+        relatedNewsIds: [15],
+        predictedMovementDirection: 'up',
+        predictedMovementPercent: 15.8,
+        confidenceScore: 0.86,
+        isBreakthrough: true,
+        analysisDate: yesterday
       }
     ];
     

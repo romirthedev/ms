@@ -11,6 +11,7 @@ import PricingSection from './PricingSection';
 import TestimonialsSection from './TestimonialsSection';
 import CtaSection from './CtaSection';
 import ContactSection from './ContactSection';
+import BentoBoxSection from './BentoBoxSection';
 
 const HomePage = () => {
   useEffect(() => {
@@ -47,6 +48,7 @@ const HomePage = () => {
       <main>
         <HeroSection />
         <StatsSection />
+        <BentoBoxSection /> {/* Add the animated bento box section */}
         <FeaturesSection />
         <HowItWorksSection />
         <DemoSection />
