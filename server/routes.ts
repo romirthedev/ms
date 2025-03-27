@@ -13,7 +13,9 @@ import { ZodError } from "zod";
 import { fromZodError } from "zod-validation-error";
 import { setupAuth } from "./auth";
 import { newsService } from "./services/newsService";
-import { aiService } from "./services/aiService";
+import { browserScrapingService } from "./services/browserScrapingService";
+import { simpleBrowserService } from "./services/simpleBrowserService"; 
+import { localAnalysisService } from "./services/localAnalysisService";
 
 // Middleware to check if user is authenticated
 const isAuthenticated = (req: Request, res: any, next: any) => {
@@ -46,11 +48,12 @@ async function performDataUpdate() {
   try {
     console.log("Performing scheduled data update...");
     
-    // Update news for all stocks
-    await newsService.updateAllStockNews();
+    // Use our simple browser service which doesn't depend on Puppeteer
+    // This provides reliable news generation without external dependencies
+    await simpleBrowserService.updateAllStockNews();
     
-    // Update AI analysis for all stocks
-    await aiService.updateAllStockAnalyses();
+    // Update stock analysis using our local algorithm instead of external API
+    await localAnalysisService.updateAllStockAnalyses();
     
     console.log("Scheduled data update completed");
   } catch (error) {
@@ -270,8 +273,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Manually trigger news update
   app.post("/api/admin/update-news", async (req, res) => {
     try {
-      await newsService.updateAllStockNews();
-      return res.status(200).json({ success: true, message: "News update triggered successfully" });
+      // Use our simple browser service instead of Puppeteer-based one
+      await simpleBrowserService.updateAllStockNews();
+      return res.status(200).json({ success: true, message: "News update triggered successfully using simple browser service" });
     } catch (error) {
       return res.status(500).json({ success: false, message: "Failed to trigger news update" });
     }
@@ -280,8 +284,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Manually trigger analysis update
   app.post("/api/admin/update-analyses", async (req, res) => {
     try {
-      await aiService.updateAllStockAnalyses();
-      return res.status(200).json({ success: true, message: "Analysis update triggered successfully" });
+      // Use our local analysis service instead of external AI API
+      await localAnalysisService.updateAllStockAnalyses();
+      return res.status(200).json({ success: true, message: "Analysis update triggered successfully using local algorithm" });
     } catch (error) {
       return res.status(500).json({ success: false, message: "Failed to trigger analysis update" });
     }
