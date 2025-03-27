@@ -40,12 +40,15 @@ import {
   Newspaper, 
   Plus, 
   Eye,
-  Star
+  Star,
+  RefreshCw,
+  ExternalLink
 } from 'lucide-react';
-import { apiRequest } from '@/lib/queryClient';
+import { apiRequest, queryClient } from '@/lib/queryClient';
 import { useToast } from '@/hooks/use-toast';
 import { Badge } from '@/components/ui/badge';
 import { format } from 'date-fns';
+import { motion, AnimatePresence } from 'framer-motion';
 
 const DashboardPage = () => {
   const { user } = useAuth();
@@ -98,6 +101,22 @@ const DashboardPage = () => {
     queryKey: ['/api/analyses/stock', selectedStock],
     enabled: selectedStock !== null,
   });
+  
+  const refreshData = () => {
+    queryClient.invalidateQueries({ queryKey: ['/api/analyses'] });
+    queryClient.invalidateQueries({ queryKey: ['/api/analyses/top'] });
+    queryClient.invalidateQueries({ queryKey: ['/api/news'] });
+    
+    if (selectedStock) {
+      queryClient.invalidateQueries({ queryKey: ['/api/news/stock', selectedStock] });
+      queryClient.invalidateQueries({ queryKey: ['/api/analyses/stock', selectedStock] });
+    }
+    
+    toast({
+      title: "Data Refreshed",
+      description: "The latest stock data has been loaded",
+    });
+  };
   
   const addToWatchlist = async (stockId: number) => {
     if (!user) {
@@ -279,6 +298,7 @@ const DashboardPage = () => {
     }
     
     const analysis = stockAnalysis.data;
+    const evidencePoints = analysis.evidencePoints || [];
     
     return (
       <div className="grid md:grid-cols-3 gap-4">
@@ -312,14 +332,16 @@ const DashboardPage = () => {
                   <p className="text-gray-700 mt-1">{analysis.summaryText}</p>
                 </div>
                 
-                <div>
-                  <h3 className="text-lg font-medium">Key Evidence</h3>
-                  <ul className="list-disc pl-5 mt-1 space-y-1">
-                    {analysis.evidencePoints.map((point, index) => (
-                      <li key={index} className="text-gray-700">{point}</li>
-                    ))}
-                  </ul>
-                </div>
+                {evidencePoints.length > 0 && (
+                  <div>
+                    <h3 className="text-lg font-medium">Key Evidence</h3>
+                    <ul className="list-disc pl-5 mt-1 space-y-1">
+                      {evidencePoints.map((point, index) => (
+                        <li key={index} className="text-gray-700">{point}</li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
                 
                 <div className="grid grid-cols-2 gap-4">
                   <div className="bg-gray-50 p-3 rounded-lg">
@@ -407,9 +429,10 @@ const DashboardPage = () => {
                         href={news.url} 
                         target="_blank" 
                         rel="noopener noreferrer"
-                        className="text-sm text-primary underline mt-2 inline-block"
+                        className="text-sm text-primary underline mt-2 inline-block flex items-center"
                       >
-                        Read more
+                        <span>Read more</span>
+                        <ExternalLink className="ml-1 h-3 w-3" />
                       </a>
                     </div>
                   ))}
@@ -436,167 +459,169 @@ const DashboardPage = () => {
       </div>
       
       <Tabs defaultValue="top-picks" value={activeTab} onValueChange={setActiveTab}>
-        <div className="flex justify-between items-center">
-          <TabsList>
+        <div className="flex justify-between items-center mb-4">
+          <TabsList className="grid w-[400px] grid-cols-4">
             <TabsTrigger value="top-picks" className="flex items-center">
-              <TrendingUp className="mr-2 h-4 w-4" />
+              <Star className="h-4 w-4 mr-2" />
               Top Picks
             </TabsTrigger>
             <TabsTrigger value="all-stocks" className="flex items-center">
-              <BarChart3 className="mr-2 h-4 w-4" />
+              <BarChart3 className="h-4 w-4 mr-2" />
               All Stocks
             </TabsTrigger>
             <TabsTrigger value="watchlist" className="flex items-center">
-              <Star className="mr-2 h-4 w-4" />
-              My Watchlist
+              <Eye className="h-4 w-4 mr-2" />
+              Watchlist
             </TabsTrigger>
-            <TabsTrigger value="details" className="flex items-center">
-              <Search className="mr-2 h-4 w-4" />
-              Stock Details
+            <TabsTrigger value="details" disabled={!selectedStock} className="flex items-center">
+              <Search className="h-4 w-4 mr-2" />
+              Details
             </TabsTrigger>
           </TabsList>
           
-          <div className="flex items-center space-x-2">
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <Button variant="outline" className="flex items-center">
-                  <Newspaper className="mr-2 h-4 w-4" />
-                  News Source
-                  <ChevronDown className="ml-2 h-4 w-4" />
-                </Button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent>
-                <DropdownMenuItem>All Sources</DropdownMenuItem>
-                <DropdownMenuItem>Financial News</DropdownMenuItem>
-                <DropdownMenuItem>Tech Publications</DropdownMenuItem>
-                <DropdownMenuItem>Business Journals</DropdownMenuItem>
-              </DropdownMenuContent>
-            </DropdownMenu>
-          </div>
+          <Button 
+            variant="outline" 
+            size="sm" 
+            onClick={refreshData}
+            className="flex items-center"
+          >
+            <RefreshCw className="h-4 w-4 mr-2" />
+            Refresh Data
+          </Button>
         </div>
         
-        <TabsContent value="top-picks" className="space-y-4">
-          <Card>
-            <CardHeader>
-              <CardTitle>Top Stock Opportunities</CardTitle>
-              <CardDescription>
-                Stocks with the highest AI-detected potential based on recent news and breakthroughs
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              {loadingTop ? (
-                <div className="text-center py-4">Loading top picks...</div>
-              ) : topAnalyses && topAnalyses.data ? (
-                renderAnalysisTable(topAnalyses.data)
-              ) : (
-                <div className="text-center py-4 text-gray-500">No analyses available</div>
-              )}
-            </CardContent>
-          </Card>
-        </TabsContent>
-        
-        <TabsContent value="all-stocks" className="space-y-4">
-          <Card>
-            <CardHeader>
-              <CardTitle>All Analyzed Stocks</CardTitle>
-              <CardDescription>
-                Complete list of stocks analyzed by our AI system
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              {loadingAll ? (
-                <div className="text-center py-4">Loading analyses...</div>
-              ) : allAnalyses && allAnalyses.data ? (
-                renderAnalysisTable(allAnalyses.data)
-              ) : (
-                <div className="text-center py-4 text-gray-500">No analyses available</div>
-              )}
-            </CardContent>
-          </Card>
-        </TabsContent>
-        
-        <TabsContent value="watchlist" className="space-y-4">
-          <Card>
-            <CardHeader>
-              <CardTitle>My Watchlist</CardTitle>
-              <CardDescription>
-                Stocks you've added to your personal watchlist
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              {!user ? (
-                <div className="text-center py-8">
-                  <p className="text-gray-500 mb-4">Please log in to view your watchlist</p>
-                  <Button>Log In</Button>
-                </div>
-              ) : loadingWatchlist ? (
-                <div className="text-center py-4">Loading watchlist...</div>
-              ) : watchlist && watchlist.data && watchlist.data.length > 0 ? (
-                <div className="rounded-md border">
-                  <Table>
-                    <TableHeader>
-                      <TableRow>
-                        <TableHead>Symbol</TableHead>
-                        <TableHead>Company</TableHead>
-                        <TableHead>Current Price</TableHead>
-                        <TableHead>Change</TableHead>
-                        <TableHead>Added On</TableHead>
-                        <TableHead>Actions</TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {watchlist.data.map((item) => (
-                        <TableRow key={item.id}>
-                          <TableCell className="font-medium">{item.stock.symbol}</TableCell>
-                          <TableCell>{item.stock.companyName}</TableCell>
-                          <TableCell>{formatCurrency(item.stock.currentPrice)}</TableCell>
-                          <TableCell>
-                            <div className={item.stock.priceChange >= 0 ? 'text-green-600' : 'text-red-600'}>
-                              {item.stock.priceChange > 0 && '+'}
-                              {item.stock.priceChange.toFixed(2)} ({formatPercent(item.stock.priceChangePercent)})
-                            </div>
-                          </TableCell>
-                          <TableCell>{formatDate(item.addedAt.toString())}</TableCell>
-                          <TableCell>
-                            <div className="flex items-center space-x-2">
-                              <Button 
-                                variant="ghost" 
-                                size="sm"
-                                onClick={() => handleSelectStock(item.stock.symbol)}
-                              >
-                                <Eye className="h-4 w-4 mr-1" />
-                                Details
-                              </Button>
-                              <Button 
-                                variant="outline" 
-                                size="sm"
-                                onClick={() => removeFromWatchlist(item.stockId)}
-                              >
-                                <Star className="h-4 w-4 mr-1 fill-yellow-500 text-yellow-500" />
-                                Remove
-                              </Button>
-                            </div>
-                          </TableCell>
-                        </TableRow>
-                      ))}
-                    </TableBody>
-                  </Table>
-                </div>
-              ) : (
-                <div className="text-center py-8">
-                  <p className="text-gray-500 mb-4">Your watchlist is empty</p>
-                  <Button onClick={() => setActiveTab('top-picks')}>
-                    Browse Top Picks
-                  </Button>
-                </div>
-              )}
-            </CardContent>
-          </Card>
-        </TabsContent>
-        
-        <TabsContent value="details" className="space-y-4">
-          {renderStockDetail()}
-        </TabsContent>
+        <AnimatePresence mode="wait">
+          <motion.div
+            key={activeTab}
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -10 }}
+            transition={{ duration: 0.2 }}
+          >
+            <TabsContent value="top-picks" className="space-y-4">
+              <Card>
+                <CardHeader>
+                  <CardTitle>Top Stock Opportunities</CardTitle>
+                  <CardDescription>
+                    Stocks with the highest AI-detected potential based on recent news and breakthroughs
+                  </CardDescription>
+                </CardHeader>
+                <CardContent>
+                  {loadingTop ? (
+                    <div className="text-center py-4">Loading top picks...</div>
+                  ) : topAnalyses && topAnalyses.data ? (
+                    renderAnalysisTable(topAnalyses.data)
+                  ) : (
+                    <div className="text-center py-4 text-gray-500">No analyses available</div>
+                  )}
+                </CardContent>
+              </Card>
+            </TabsContent>
+            
+            <TabsContent value="all-stocks" className="space-y-4">
+              <Card>
+                <CardHeader>
+                  <CardTitle>All Analyzed Stocks</CardTitle>
+                  <CardDescription>
+                    Complete list of stocks analyzed by our AI system
+                  </CardDescription>
+                </CardHeader>
+                <CardContent>
+                  {loadingAll ? (
+                    <div className="text-center py-4">Loading analyses...</div>
+                  ) : allAnalyses && allAnalyses.data ? (
+                    renderAnalysisTable(allAnalyses.data)
+                  ) : (
+                    <div className="text-center py-4 text-gray-500">No analyses available</div>
+                  )}
+                </CardContent>
+              </Card>
+            </TabsContent>
+            
+            <TabsContent value="watchlist" className="space-y-4">
+              <Card>
+                <CardHeader>
+                  <CardTitle>My Watchlist</CardTitle>
+                  <CardDescription>
+                    Stocks you've added to your personal watchlist
+                  </CardDescription>
+                </CardHeader>
+                <CardContent>
+                  {!user ? (
+                    <div className="text-center py-8">
+                      <p className="text-gray-500 mb-4">Please log in to view your watchlist</p>
+                      <Button>Log In</Button>
+                    </div>
+                  ) : loadingWatchlist ? (
+                    <div className="text-center py-4">Loading watchlist...</div>
+                  ) : watchlist && watchlist.data && watchlist.data.length > 0 ? (
+                    <div className="rounded-md border">
+                      <Table>
+                        <TableHeader>
+                          <TableRow>
+                            <TableHead>Symbol</TableHead>
+                            <TableHead>Company</TableHead>
+                            <TableHead>Current Price</TableHead>
+                            <TableHead>Change</TableHead>
+                            <TableHead>Added On</TableHead>
+                            <TableHead>Actions</TableHead>
+                          </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                          {watchlist.data.map((item) => (
+                            <TableRow key={item.id}>
+                              <TableCell className="font-medium">{item.stock.symbol}</TableCell>
+                              <TableCell>{item.stock.companyName}</TableCell>
+                              <TableCell>{formatCurrency(item.stock.currentPrice)}</TableCell>
+                              <TableCell>
+                                <div className={item.stock.priceChange >= 0 ? 'text-green-600' : 'text-red-600'}>
+                                  {item.stock.priceChange > 0 && '+'}
+                                  {item.stock.priceChange.toFixed(2)} ({formatPercent(item.stock.priceChangePercent)})
+                                </div>
+                              </TableCell>
+                              <TableCell>{formatDate(item.addedAt.toString())}</TableCell>
+                              <TableCell>
+                                <div className="flex items-center space-x-2">
+                                  <Button 
+                                    variant="ghost" 
+                                    size="sm"
+                                    onClick={() => handleSelectStock(item.stock.symbol)}
+                                  >
+                                    <Eye className="h-4 w-4 mr-1" />
+                                    Details
+                                  </Button>
+                                  <Button 
+                                    variant="outline" 
+                                    size="sm"
+                                    onClick={() => removeFromWatchlist(item.stockId)}
+                                  >
+                                    <Star className="h-4 w-4 mr-1 fill-yellow-500 text-yellow-500" />
+                                    Remove
+                                  </Button>
+                                </div>
+                              </TableCell>
+                            </TableRow>
+                          ))}
+                        </TableBody>
+                      </Table>
+                    </div>
+                  ) : (
+                    <div className="text-center py-8">
+                      <p className="text-gray-500 mb-4">Your watchlist is empty</p>
+                      <Button onClick={() => setActiveTab('top-picks')}>
+                        Browse Top Picks
+                      </Button>
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+            </TabsContent>
+            
+            <TabsContent value="details" className="space-y-4">
+              {renderStockDetail()}
+            </TabsContent>
+          </motion.div>
+        </AnimatePresence>
       </Tabs>
     </div>
   );

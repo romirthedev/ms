@@ -12,6 +12,8 @@ import {
 import { ZodError } from "zod";
 import { fromZodError } from "zod-validation-error";
 import { setupAuth } from "./auth";
+import { newsService } from "./services/newsService";
+import { aiService } from "./services/aiService";
 
 // Middleware to check if user is authenticated
 const isAuthenticated = (req: Request, res: any, next: any) => {
@@ -24,9 +26,44 @@ const isAuthenticated = (req: Request, res: any, next: any) => {
   });
 };
 
+// Setup data refresh interval (30 seconds)
+let updateInterval: NodeJS.Timeout;
+
+function startDataUpdateInterval() {
+  if (updateInterval) {
+    clearInterval(updateInterval);
+  }
+  
+  // Initial update
+  performDataUpdate();
+  
+  // Setup interval for every 30 seconds
+  updateInterval = setInterval(performDataUpdate, 30000);
+  console.log("Data update interval started: every 30 seconds");
+}
+
+async function performDataUpdate() {
+  try {
+    console.log("Performing scheduled data update...");
+    
+    // Update news for all stocks
+    await newsService.updateAllStockNews();
+    
+    // Update AI analysis for all stocks
+    await aiService.updateAllStockAnalyses();
+    
+    console.log("Scheduled data update completed");
+  } catch (error) {
+    console.error("Error during scheduled data update:", error);
+  }
+}
+
 export async function registerRoutes(app: Express): Promise<Server> {
   // Set up authentication routes
   setupAuth(app);
+  
+  // Start the periodic data updates
+  startDataUpdateInterval();
 
   // API routes for form submissions
   app.post("/api/contact", async (req, res) => {
@@ -195,6 +232,28 @@ export async function registerRoutes(app: Express): Promise<Server> {
       return res.status(200).json({ success: true, message: "Removed from watchlist" });
     } catch (error) {
       return res.status(500).json({ success: false, message: "Failed to remove from watchlist" });
+    }
+  });
+  
+  // Manual update endpoints (for testing or admin use)
+  
+  // Manually trigger news update
+  app.post("/api/admin/update-news", async (req, res) => {
+    try {
+      await newsService.updateAllStockNews();
+      return res.status(200).json({ success: true, message: "News update triggered successfully" });
+    } catch (error) {
+      return res.status(500).json({ success: false, message: "Failed to trigger news update" });
+    }
+  });
+  
+  // Manually trigger analysis update
+  app.post("/api/admin/update-analyses", async (req, res) => {
+    try {
+      await aiService.updateAllStockAnalyses();
+      return res.status(200).json({ success: true, message: "Analysis update triggered successfully" });
+    } catch (error) {
+      return res.status(500).json({ success: false, message: "Failed to trigger analysis update" });
     }
   });
 
