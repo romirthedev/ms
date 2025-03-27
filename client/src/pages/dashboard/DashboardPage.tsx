@@ -59,6 +59,9 @@ const StockNewsSources: React.FC<{ stockSymbol: string }> = ({ stockSymbol }) =>
     enabled: true,
   });
 
+  // Logging for debugging
+  console.log(`News data for ${stockSymbol}:`, data);
+
   // Local formatDate function to prevent reference errors
   const formatNewsDate = (dateString: string) => {
     const date = new Date(dateString);
@@ -72,7 +75,7 @@ const StockNewsSources: React.FC<{ stockSymbol: string }> = ({ stockSymbol }) =>
   
   return (
     <div className="grid grid-cols-1 md:grid-cols-3 gap-2">
-      {data.data.slice(0, 6).map((news: NewsItem, idx: number) => (
+      {data.data.map((news: NewsItem, idx: number) => (
         <a 
           key={idx} 
           href={news.url}
@@ -337,19 +340,23 @@ const DashboardPage = () => {
                           onClick={() => {
                             const row = document.getElementById(`evidence-${analysis.id}`);
                             if (row) {
-                              row.classList.toggle('hidden');
+                              if (row.style.display === 'none') {
+                                row.style.display = 'table-row';
+                              } else {
+                                row.style.display = 'none';
+                              }
                             }
                           }}
                         >
                           <Newspaper className="h-4 w-4 mr-1" />
-                          Sources
+                          Toggle Sources
                         </Button>
                       )}
                     </div>
                   </TableCell>
                 </TableRow>
                 {showEvidenceSources && (
-                  <tr id={`evidence-${analysis.id}`} className="hidden">
+                  <tr id={`evidence-${analysis.id}`}>
                     <td colSpan={7} className="p-4 bg-gray-50">
                       <div className="text-sm font-medium mb-2">Evidence sources for {analysis.stockSymbol}:</div>
                       <div className="space-y-2 max-h-60 overflow-y-auto">
@@ -609,7 +616,7 @@ const DashboardPage = () => {
                     </CardDescription>
                   </div>
                   <Badge variant="outline" className="mt-2 sm:mt-0">
-                    Click "Sources" to see evidence behind each pick
+                    Evidence sources shown below each stock - click "Toggle Sources" to hide/show
                   </Badge>
                 </CardHeader>
                 <CardContent>
