@@ -548,11 +548,11 @@ const HeroSection = () => {
                 ))}
               </div>
               <motion.p 
-                className="ml-4 text-sm font-medium text-green-900"
+                className="ml-4 text-sm font-medium text-black"
                 initial={{ opacity: 0, x: -10 }}
                 animate={{ opacity: 1, x: 0 }}
                 transition={{ duration: 0.5, delay: 1.4 }}
-                style={{ textShadow: "0 1px 2px rgba(255,255,255,0.4)" }}
+                style={{ textShadow: "0 1px 2px rgba(255,255,255,0.5)" }}
               >
                 Join 5,000+ investors and fund managers
               </motion.p>
