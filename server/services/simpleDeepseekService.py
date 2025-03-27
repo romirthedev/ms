@@ -10,6 +10,7 @@ import sys
 import random
 import argparse
 import datetime
+import time
 from typing import Dict, List, Any, Optional
 
 def get_stock_info(symbol: str) -> Dict[str, Any]:
@@ -139,23 +140,49 @@ def get_stock_info(symbol: str) -> Dict[str, Any]:
         f"Consider the {sentiment.lower()} sentiment when evaluating this investment opportunity."
     ]
     
+    # Function to get real news URLs
+    def get_real_news_url(symbol, source):
+        # Map sources to their URL templates
+        source_urls = {
+            "Financial News": f"https://www.cnbc.com/quotes/{symbol}",
+            "Market Analysis": f"https://www.marketwatch.com/investing/stock/{symbol.lower()}",
+            "Business Journal": f"https://www.wsj.com/market-data/quotes/{symbol}",
+            "Reuters": f"https://www.reuters.com/companies/{symbol}.O", 
+            "Yahoo Finance": f"https://finance.yahoo.com/quote/{symbol}",
+            # Fallback to Yahoo Finance if source isn't mapped
+            "default": f"https://finance.yahoo.com/quote/{symbol}"
+        }
+        
+        # Get the URL template for the given source, or use default
+        url_template = source_urls.get(source, source_urls["default"])
+        
+        # Add a timestamp to prevent caching
+        timestamp = int(time.time())
+        if '?' in url_template:
+            return f"{url_template}&t={timestamp}"
+        else:
+            return f"{url_template}?t={timestamp}"
+    
+    # News sources
+    sources = ["Financial News", "Market Analysis", "Business Journal", "Reuters", "Yahoo Finance"]
+    
     # Generate news
     news = [
         {
             'title': f"{company['name']} Reports {'Positive' if random.random() > 0.5 else 'Mixed'} Quarterly Results",
-            'url': f"https://finance.example.com/news/{symbol.lower()}-quarterly-results",
+            'url': get_real_news_url(symbol, "Financial News"),
             'publishedAt': (today - datetime.timedelta(days=random.randint(1, 5))).strftime('%Y-%m-%d'),
             'source': 'Financial News'
         },
         {
             'title': f"Analysts {'Upgrade' if random.random() > 0.5 else 'Maintain'} Rating on {company['name']}",
-            'url': f"https://finance.example.com/news/{symbol.lower()}-analyst-rating",
+            'url': get_real_news_url(symbol, "Market Analysis"),
             'publishedAt': (today - datetime.timedelta(days=random.randint(1, 10))).strftime('%Y-%m-%d'),
             'source': 'Market Analysis'
         },
         {
             'title': f"{company['name']} {'Expands' if random.random() > 0.5 else 'Optimizes'} Operations in Global Markets",
-            'url': f"https://finance.example.com/news/{symbol.lower()}-global-markets",
+            'url': get_real_news_url(symbol, "Business Journal"),
             'publishedAt': (today - datetime.timedelta(days=random.randint(1, 15))).strftime('%Y-%m-%d'),
             'source': 'Business Journal'
         }

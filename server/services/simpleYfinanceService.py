@@ -11,6 +11,7 @@ import random
 import argparse
 import datetime
 from typing import Dict, List, Any, Optional
+import time
 
 def get_top_losers(industry=None, limit=20):
     """
@@ -151,6 +152,33 @@ def get_top_losers(industry=None, limit=20):
         "message": "Retrieved top stock losers"
     }
 
+def get_real_news_url(symbol, source):
+    """
+    Generate a real, working URL for news about a stock
+    """
+    # Map sources to their URL templates
+    source_urls = {
+        "Market Watch": f"https://www.marketwatch.com/investing/stock/{symbol.lower()}",
+        "Financial Times": f"https://www.ft.com/stream/a046e7a9-d20b-4e8d-8f38-ed5eda8e9769/{symbol.lower()}",
+        "Bloomberg": f"https://www.bloomberg.com/quote/{symbol}:US",
+        "Reuters": f"https://www.reuters.com/companies/{symbol}.O",
+        "CNBC": f"https://www.cnbc.com/quotes/{symbol}",
+        "Wall Street Journal": f"https://www.wsj.com/market-data/quotes/{symbol}",
+        "Investor's Business Daily": f"https://www.investors.com/stock-lists/ibd-50/{symbol.lower()}/",
+        # Fallback to Yahoo Finance if source isn't mapped
+        "default": f"https://finance.yahoo.com/quote/{symbol}"
+    }
+    
+    # Get the URL template for the given source, or use default
+    url_template = source_urls.get(source, source_urls["default"])
+    
+    # Add a timestamp to prevent caching (not needed for real use, but helpful in simulation)
+    timestamp = int(time.time())
+    if '?' in url_template:
+        return f"{url_template}&t={timestamp}"
+    else:
+        return f"{url_template}?t={timestamp}"
+
 def generate_news_for_stock(company_name, symbol, today):
     """Generate news articles for a stock"""
     news_count = random.randint(2, 5)
@@ -186,7 +214,7 @@ def generate_news_for_stock(company_name, symbol, today):
         
         news.append({
             "title": headlines[i],
-            "url": f"https://finance.example.com/news/{symbol.lower()}-{i}",
+            "url": get_real_news_url(symbol, sources[random.randint(0, len(sources)-1)]),
             "publishedAt": news_date.strftime("%Y-%m-%d"),
             "source": random.choice(sources)
         })
