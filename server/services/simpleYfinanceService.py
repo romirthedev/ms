@@ -109,9 +109,11 @@ def get_top_losers(industry=None, limit=20):
     
     # We'll generate more than we need, so we can sort and take the most negative ones
     for stock in stocks[:min(len(stocks), limit * 3)]:
-        # Generate a negative price change
-        price_change_percent = -random.uniform(1.0, 15.0)
+        # Generate a negative price change (daily loss)
         current_price = random.uniform(10.0, 500.0)
+        # For daily losses, we want to make it clear these are daily percentage changes
+        # Using a more realistic range for daily losses (0.5% to 8%)
+        price_change_percent = -random.uniform(0.5, 8.0)
         previous_close = current_price / (1 + price_change_percent / 100)
         price_change = current_price - previous_close
         

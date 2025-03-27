@@ -132,8 +132,8 @@ export default function BiggestLosersPage() {
     <div className="container mx-auto py-6 space-y-8">
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
         <div>
-          <h1 className="text-3xl font-bold">Biggest Losers</h1>
-          <p className="text-muted-foreground">Stocks with the largest negative price movements</p>
+          <h1 className="text-3xl font-bold">Biggest Daily Losers</h1>
+          <p className="text-muted-foreground">Stocks with the largest daily percentage losses</p>
         </div>
 
         {/* Filter controls */}
@@ -269,9 +269,10 @@ export default function BiggestLosersPage() {
                             {(stock.priceChangePercent || 0).toFixed(2)}%
                           </span>
                           <span className="text-sm text-muted-foreground ml-2">
-                            (${(stock.priceChange || 0).toFixed(2)})
+                            Today (${(stock.priceChange || 0).toFixed(2)})
                           </span>
                         </div>
+                        <p className="text-xs text-muted-foreground">Daily change from previous close</p>
                         <p className="text-sm text-muted-foreground mt-1">{stock.industry || 'N/A'}</p>
                       </div>
                     </div>
@@ -456,6 +457,7 @@ export default function BiggestLosersPage() {
                       <span className={`text-lg font-bold ${deepSeekData.priceChangePercent < 0 ? 'text-destructive' : 'text-green-500'}`}>
                         {deepSeekData.priceChangePercent.toFixed(2)}%
                       </span>
+                      <span className="text-xs ml-1 text-muted-foreground">(daily)</span>
                     </div>
                     <p className="text-sm text-muted-foreground">
                       ${deepSeekData.currentPrice.toFixed(2)}

@@ -8,10 +8,11 @@ import { TrendingUp, Zap, BarChart3, Search, Globe, ArrowRight } from 'lucide-re
 const AnimatedTitle = ({ children }: { children: React.ReactNode }) => {
   return (
     <motion.h1
-      className="text-5xl sm:text-6xl font-extrabold tracking-tight bg-clip-text text-transparent bg-gradient-to-r from-white to-blue-100"
+      className="text-5xl sm:text-6xl font-extrabold tracking-tight bg-clip-text text-transparent bg-gradient-to-r from-white to-blue-200 drop-shadow-sm"
       initial={{ opacity: 0, y: 20 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.8, delay: 0.2, ease: "easeOut" }}
+      style={{ textShadow: "0 1px 3px rgba(0,0,0,0.2)" }}
     >
       {children}
     </motion.h1>
@@ -21,10 +22,11 @@ const AnimatedTitle = ({ children }: { children: React.ReactNode }) => {
 const AnimatedParagraph = ({ children, delay = 0.4 }: { children: React.ReactNode, delay?: number }) => {
   return (
     <motion.p
-      className="mt-4 text-xl text-blue-100"
+      className="mt-4 text-xl font-medium text-white"
       initial={{ opacity: 0, y: 20 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.8, delay: delay, ease: "easeOut" }}
+      style={{ textShadow: "0 1px 2px rgba(0,0,0,0.1)" }}
     >
       {children}
     </motion.p>
@@ -477,10 +479,10 @@ const StatCounter = ({ label, value, icon: Icon, delay }: { label: string, value
         <Icon className="h-5 w-5 text-primary-600" />
       </div>
       <div>
-        <div className="text-2xl font-bold text-white">
+        <div className="text-2xl font-bold text-white drop-shadow" style={{ textShadow: "0 1px 2px rgba(0,0,0,0.2)" }}>
           {isInView ? <AnimatedCounter value={value} delay={delay} /> : 0}+
         </div>
-        <div className="text-sm text-blue-100">{label}</div>
+        <div className="text-sm font-medium text-white">{label}</div>
       </div>
     </motion.div>
   );
@@ -488,7 +490,7 @@ const StatCounter = ({ label, value, icon: Icon, delay }: { label: string, value
 
 const HeroSection = () => {
   return (
-    <section className="relative bg-gradient-to-br from-primary-900 via-primary-800 to-primary-700 text-white overflow-hidden">
+    <section className="relative bg-gradient-to-br from-primary-900 via-primary-800 to-primary-700 text-gray-50 overflow-hidden">
       {/* Background animated elements */}
       <GlowingParticles />
       
@@ -546,10 +548,11 @@ const HeroSection = () => {
                 ))}
               </div>
               <motion.p 
-                className="ml-4 text-sm font-medium text-blue-100"
+                className="ml-4 text-sm font-medium text-white"
                 initial={{ opacity: 0, x: -10 }}
                 animate={{ opacity: 1, x: 0 }}
                 transition={{ duration: 0.5, delay: 1.4 }}
+                style={{ textShadow: "0 1px 2px rgba(0,0,0,0.1)" }}
               >
                 Join 5,000+ investors and fund managers
               </motion.p>
