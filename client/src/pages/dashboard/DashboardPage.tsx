@@ -50,6 +50,39 @@ import { Badge } from '@/components/ui/badge';
 import { format } from 'date-fns';
 import { motion, AnimatePresence } from 'framer-motion';
 
+// Component to display news sources for a stock
+const StockNewsSources: React.FC<{ stockSymbol: string }> = ({ stockSymbol }) => {
+  const { data, isLoading } = useQuery<{ success: boolean; data: NewsItem[] }>({
+    queryKey: [`/api/news/stock/${stockSymbol}`],
+    enabled: true,
+  });
+
+  if (isLoading) return <div className="col-span-3 text-center py-2">Loading evidence sources...</div>;
+  if (!data || !data.data || data.data.length === 0) {
+    return <div className="col-span-3 text-center py-2">No evidence sources available</div>;
+  }
+  
+  return (
+    <div className="grid grid-cols-1 md:grid-cols-3 gap-2">
+      {data.data.slice(0, 6).map((news: NewsItem, idx: number) => (
+        <a 
+          key={idx} 
+          href={news.url}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="block p-2 border rounded hover:bg-gray-100 transition-colors"
+        >
+          <div className="text-sm font-medium mb-1 line-clamp-2">{news.title}</div>
+          <div className="flex justify-between items-center text-xs text-gray-500">
+            <span>{news.source}</span>
+            <span>{formatDate(news.publishedAt.toString())}</span>
+          </div>
+        </a>
+      ))}
+    </div>
+  );
+};
+
 const DashboardPage = () => {
   const { user } = useAuth();
   const { toast } = useToast();
@@ -219,7 +252,13 @@ const DashboardPage = () => {
     setActiveTab('details');
   };
   
-  const renderAnalysisTable = (analyses: StockAnalysis[]) => {
+  // Fetch news for quick preview in the analysis table
+  const fetchNewsPreview = async (symbol: string) => {
+    const result = await apiRequest('GET', `/api/news/stock/${symbol}?limit=3`);
+    return await result.json();
+  };
+  
+  const renderAnalysisTable = (analyses: StockAnalysis[], showEvidenceSources: boolean = false) => {
     return (
       <div className="rounded-md border">
         <Table>
@@ -236,55 +275,82 @@ const DashboardPage = () => {
           </TableHeader>
           <TableBody>
             {analyses.map((analysis) => (
-              <TableRow key={analysis.id}>
-                <TableCell className="font-medium">{analysis.stockSymbol}</TableCell>
-                <TableCell>{analysis.companyName}</TableCell>
-                <TableCell>{renderPotentialRating(analysis.potentialRating)}</TableCell>
-                <TableCell>
-                  <div className={`flex items-center ${getAnalysisColor(analysis.predictedMovementDirection)}`}>
-                    {analysis.predictedMovementDirection === 'up' && <TrendingUp className="mr-1 h-4 w-4" />}
-                    {analysis.predictedMovementDirection === 'down' && <ArrowUpRight className="mr-1 h-4 w-4 rotate-180" />}
-                    {analysis.predictedMovementPercent ? `${analysis.predictedMovementPercent.toFixed(2)}%` : 'N/A'}
-                  </div>
-                </TableCell>
-                <TableCell>
-                  <Badge className={getConfidenceColor(analysis.confidenceScore)}>
-                    {Math.round(analysis.confidenceScore * 100)}%
-                  </Badge>
-                </TableCell>
-                <TableCell>{formatDate(analysis.analysisDate.toString())}</TableCell>
-                <TableCell>
-                  <div className="flex items-center space-x-2">
-                    <Button 
-                      variant="ghost" 
-                      size="sm" 
-                      onClick={() => handleSelectStock(analysis.stockSymbol)}
-                    >
-                      <Eye className="h-4 w-4 mr-1" />
-                      Details
-                    </Button>
-                    {isInWatchlist(analysis.stockId) ? (
+              <React.Fragment key={analysis.id}>
+                <TableRow>
+                  <TableCell className="font-medium">{analysis.stockSymbol}</TableCell>
+                  <TableCell>{analysis.companyName}</TableCell>
+                  <TableCell>{renderPotentialRating(analysis.potentialRating)}</TableCell>
+                  <TableCell>
+                    <div className={`flex items-center ${getAnalysisColor(analysis.predictedMovementDirection)}`}>
+                      {analysis.predictedMovementDirection === 'up' && <TrendingUp className="mr-1 h-4 w-4" />}
+                      {analysis.predictedMovementDirection === 'down' && <ArrowUpRight className="mr-1 h-4 w-4 rotate-180" />}
+                      {analysis.predictedMovementPercent ? `${analysis.predictedMovementPercent.toFixed(2)}%` : 'N/A'}
+                    </div>
+                  </TableCell>
+                  <TableCell>
+                    <Badge className={getConfidenceColor(analysis.confidenceScore)}>
+                      {Math.round(analysis.confidenceScore * 100)}%
+                    </Badge>
+                  </TableCell>
+                  <TableCell>{formatDate(analysis.analysisDate.toString())}</TableCell>
+                  <TableCell>
+                    <div className="flex items-center space-x-2">
                       <Button 
-                        variant="outline" 
-                        size="sm"
-                        onClick={() => removeFromWatchlist(analysis.stockId)}
+                        variant="ghost" 
+                        size="sm" 
+                        onClick={() => handleSelectStock(analysis.stockSymbol)}
                       >
-                        <Star className="h-4 w-4 mr-1 fill-yellow-500 text-yellow-500" />
-                        Remove
+                        <Eye className="h-4 w-4 mr-1" />
+                        Details
                       </Button>
-                    ) : (
-                      <Button 
-                        variant="outline" 
-                        size="sm"
-                        onClick={() => addToWatchlist(analysis.stockId)}
-                      >
-                        <Plus className="h-4 w-4 mr-1" />
-                        Watch
-                      </Button>
-                    )}
-                  </div>
-                </TableCell>
-              </TableRow>
+                      {isInWatchlist(analysis.stockId) ? (
+                        <Button 
+                          variant="outline" 
+                          size="sm"
+                          onClick={() => removeFromWatchlist(analysis.stockId)}
+                        >
+                          <Star className="h-4 w-4 mr-1 fill-yellow-500 text-yellow-500" />
+                          Remove
+                        </Button>
+                      ) : (
+                        <Button 
+                          variant="outline" 
+                          size="sm"
+                          onClick={() => addToWatchlist(analysis.stockId)}
+                        >
+                          <Plus className="h-4 w-4 mr-1" />
+                          Watch
+                        </Button>
+                      )}
+                      {showEvidenceSources && (
+                        <Button
+                          variant="link"
+                          size="sm"
+                          onClick={() => {
+                            const row = document.getElementById(`evidence-${analysis.id}`);
+                            if (row) {
+                              row.classList.toggle('hidden');
+                            }
+                          }}
+                        >
+                          <Newspaper className="h-4 w-4 mr-1" />
+                          Sources
+                        </Button>
+                      )}
+                    </div>
+                  </TableCell>
+                </TableRow>
+                {showEvidenceSources && (
+                  <tr id={`evidence-${analysis.id}`} className="hidden">
+                    <td colSpan={7} className="p-4 bg-gray-50">
+                      <div className="text-sm font-medium mb-2">Evidence sources for {analysis.stockSymbol}:</div>
+                      <div className="space-y-2 max-h-60 overflow-y-auto">
+                        <StockNewsSources stockSymbol={analysis.stockSymbol} />
+                      </div>
+                    </td>
+                  </tr>
+                )}
+              </React.Fragment>
             ))}
           </TableBody>
         </Table>
@@ -518,17 +584,22 @@ const DashboardPage = () => {
           >
             <TabsContent value="top-picks" className="space-y-4">
               <Card>
-                <CardHeader>
-                  <CardTitle>Top Stock Opportunities</CardTitle>
-                  <CardDescription>
-                    Stocks with the highest AI-detected potential based on recent news and breakthroughs
-                  </CardDescription>
+                <CardHeader className="flex flex-col sm:flex-row items-start sm:items-center justify-between">
+                  <div>
+                    <CardTitle>Top Stock Opportunities</CardTitle>
+                    <CardDescription>
+                      Stocks with the highest AI-detected potential based on recent news and breakthroughs
+                    </CardDescription>
+                  </div>
+                  <Badge variant="outline" className="mt-2 sm:mt-0">
+                    Click "Sources" to see evidence behind each pick
+                  </Badge>
                 </CardHeader>
                 <CardContent>
                   {loadingTop ? (
                     <div className="text-center py-4">Loading top picks...</div>
                   ) : topAnalyses && topAnalyses.data ? (
-                    renderAnalysisTable(topAnalyses.data)
+                    renderAnalysisTable(topAnalyses.data, true) // Show evidence sources
                   ) : (
                     <div className="text-center py-4 text-gray-500">No analyses available</div>
                   )}
@@ -539,16 +610,52 @@ const DashboardPage = () => {
             <TabsContent value="all-stocks" className="space-y-4">
               <Card>
                 <CardHeader>
-                  <CardTitle>All Analyzed Stocks</CardTitle>
+                  <CardTitle>NASDAQ Stocks Analysis</CardTitle>
                   <CardDescription>
-                    Complete list of stocks analyzed by our AI system
+                    Comprehensive analysis of NASDAQ stocks using real-time data from Alpha Vantage
                   </CardDescription>
                 </CardHeader>
                 <CardContent>
+                  <div className="mb-4 bg-gray-50 rounded-md p-4 border">
+                    <div className="font-medium mb-2 flex items-center">
+                      <RefreshCw className="h-4 w-4 mr-2 text-primary" />
+                      Alpha Vantage NASDAQ Stocks Monitor
+                    </div>
+                    <p className="text-sm text-gray-600 mb-2">
+                      The system is continuously analyzing available NASDAQ stocks using Alpha Vantage API. 
+                      Due to API rate limits (5 stocks every 12 seconds), we update a rotating batch of stocks 
+                      with each refresh cycle.
+                    </p>
+                    <div className="text-xs text-gray-500 bg-white p-2 rounded border">
+                      <span className="font-medium">Sources of analysis:</span> Real-time stock prices from Alpha Vantage API, news data from various sources, and machine learning models.
+                    </div>
+                  </div>
+                  
                   {loadingAll ? (
                     <div className="text-center py-4">Loading analyses...</div>
                   ) : allAnalyses && allAnalyses.data ? (
-                    renderAnalysisTable(allAnalyses.data)
+                    <div>
+                      <div className="mb-4 flex justify-between items-center">
+                        <div className="text-sm text-gray-500">
+                          Showing {allAnalyses.data.length} analyzed stocks from NASDAQ
+                        </div>
+                        <DropdownMenu>
+                          <DropdownMenuTrigger asChild>
+                            <Button variant="outline" size="sm">
+                              <ChevronDown className="h-4 w-4 mr-2" />
+                              Sort By
+                            </Button>
+                          </DropdownMenuTrigger>
+                          <DropdownMenuContent>
+                            <DropdownMenuItem>Highest Potential</DropdownMenuItem>
+                            <DropdownMenuItem>Latest Analysis</DropdownMenuItem>
+                            <DropdownMenuItem>Symbol (A-Z)</DropdownMenuItem>
+                            <DropdownMenuItem>Breaking News</DropdownMenuItem>
+                          </DropdownMenuContent>
+                        </DropdownMenu>
+                      </div>
+                      {renderAnalysisTable(allAnalyses.data)}
+                    </div>
                   ) : (
                     <div className="text-center py-4 text-gray-500">No analyses available</div>
                   )}
