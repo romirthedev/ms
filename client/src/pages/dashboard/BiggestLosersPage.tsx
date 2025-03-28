@@ -78,7 +78,7 @@ export default function BiggestLosersPage() {
     industries: string[];
     source: string;
   }>({
-    queryKey: ['/api/stocks/losers', selectedIndustry],
+    queryKey: ['/api/stocks/biggest-losers', selectedIndustry],
     staleTime: 60000, // 1 minute
   });
   

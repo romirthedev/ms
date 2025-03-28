@@ -16,8 +16,8 @@ function Router() {
     <Switch>
       <Route path="/" component={HomePage} />
       <Route path="/auth" component={AuthPage} />
-      <ProtectedRoute path="/dashboard" component={DashboardPage} />
-      <ProtectedRoute path="/dashboard/losers" component={BiggestLosersPage} />
+      <Route path="/dashboard" component={DashboardPage} />
+      <Route path="/dashboard/biggest-losers" component={BiggestLosersPage} />
       <Route component={NotFound} />
     </Switch>
   );

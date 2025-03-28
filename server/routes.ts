@@ -141,8 +141,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
   
   // Get biggest losers sorted by price change percent (negative values)
   // NOTE: This must come BEFORE the /api/stocks/:symbol route!
-  app.get("/api/stocks/losers", async (req, res) => {
-    console.log("Received request to /api/stocks/losers");
+  app.get("/api/stocks/biggest-losers", async (req, res) => {
+    console.log("Received request to /api/stocks/biggest-losers");
     try {
       // Using the new YFinance data for the Biggest Losers page
       try {
@@ -230,7 +230,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         source: "database"
       });
     } catch (error) {
-      console.error("Error in /api/stocks/losers endpoint:", error);
+      console.error("Error in /api/stocks/biggest-losers endpoint:", error);
       return res.status(500).json({ success: false, message: 'Failed to fetch biggest losers' });
     }
   });

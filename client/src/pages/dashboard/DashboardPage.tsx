@@ -579,7 +579,7 @@ const DashboardPage = () => {
               </TabsTrigger>
             </TabsList>
             
-            <Link href="/dashboard/losers">
+            <Link href="/dashboard/biggest-losers">
               <Button variant="outline" size="sm" className="flex items-center whitespace-nowrap">
                 <ArrowDown className="h-4 w-4 mr-2 text-destructive" />
                 Biggest Losers
