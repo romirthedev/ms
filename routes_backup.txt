@@ -295,8 +295,23 @@ export async function registerRoutes(app: Express): Promise<Server> {
       return res.status(500).json({ success: false, message: "Failed to fetch analysis" });
     }
   });
-
+  
   // Get top-rated stock analyses
+          source: "Google News",
+          analysisMethod: "DeepSeek AI",
+          analysisDate: new Date()
+        }
+      });
+    } catch (error) {
+      console.error("Error performing AI analysis:", error);
+      return res.status(500).json({ 
+        success: false, 
+        message: "Failed to perform AI analysis",
+        error: error instanceof Error ? error.message : String(error)
+      });
+    }
+  });
+
   app.get("/api/analyses/top", async (req, res) => {
     try {
       const limit = req.query.limit ? parseInt(req.query.limit as string) : 10;
