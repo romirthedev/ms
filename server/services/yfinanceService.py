@@ -1,23 +1,25 @@
 #!/usr/bin/env python3
 
 import yfinance as yf
+import pandas as pd
+import json
+import os
+import traceback
 from datetime import datetime, timedelta
 import logging
-import traceback
-import json
 
 # Configure logging
-logging.basicConfig(level=logging.INFO)
+logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
 
 def get_top_losers(industry=None, limit=20):
     """
     Gets the top stock losers from Yahoo Finance
-
+    
     Args:
         industry (str, optional): Filter by industry sector
         limit (int, optional): Maximum number of results to return
-
+    
     Returns:
         list: List of dictionaries with stock loser information
     """
@@ -25,127 +27,155 @@ def get_top_losers(industry=None, limit=20):
         # Get today's date and yesterday's date
         today = datetime.now()
         yesterday = today - timedelta(days=1)
-
-        logger.info(f"Fetching top losers for {today.strftime('%Y-%m-%d')}")
-
+        
+        # Format dates as YYYY-MM-DD
+        today_str = today.strftime('%Y-%m-%d')
+        yesterday_str = yesterday.strftime('%Y-%m-%d')
+        
+        logger.info(f"Fetching top losers for {today_str}")
+        
+        # Markets we're interested in
+        markets = ['nasdaq', 'nyse']
         all_losers = []
-
-        # Get all NYSE tickers using yfinance
-        nyse = yf.Tickers("^NYA")  # NYSE Composite Index
-        logger.info("Fetching NYSE stock list...")
-
-        # Use yfinance's stock screener to get all NYSE stocks
-        stock_list = []
-        try:
-            nyse_info = nyse.tickers["^NYA"].info
-            # Get list of companies from NYSE website (covers all listed companies)
-            stock_list = yf.download(
-                tickers=None,
-                group_by='ticker',
-                interval='1d',
-                index_as_ticker=True,
-                prepost=False,
-                start=yesterday.strftime('%Y-%m-%d'),
-                end=today.strftime('%Y-%m-%d'),
-                threads=True,
-                progress=False,
-                show_errors=False,
-                market='NYSE'  # This filters for NYSE stocks
-            ).index.get_level_values(0).unique().tolist()
-
-            logger.info(f"Found {len(stock_list)} NYSE stocks")
-        except Exception as e:
-            logger.error(f"Error getting NYSE stock list: {str(e)}")
-            return {'success': False, 'error': 'Failed to fetch NYSE stocks'}
-
-        # Process stocks in batches to avoid API rate limits
-        batch_size = 100
-        for i in range(0, len(stock_list), batch_size):
-            batch = stock_list[i:i+batch_size]
-            logger.info(f"Processing batch {i//batch_size + 1} of {len(stock_list)//batch_size + 1}")
-
+        
+        # Fetch losers from each market
+        for market in markets:
             try:
-                # Get data for batch of stocks
-                tickers = yf.Tickers(' '.join(batch))
-
-                for symbol in batch:
-                    try:
-                        ticker = tickers.tickers[symbol]
-                        info = ticker.info
-                        history = ticker.history(period='2d')
-
-                        if len(history) < 2:
-                            continue
-
-                        current_price = history['Close'].iloc[-1]
-                        prev_price = history['Close'].iloc[-2]
-                        price_change = current_price - prev_price
-                        price_change_percent = (price_change / prev_price) * 100
-
-                        # Only include stocks that are down
-                        if price_change_percent >= 0:
-                            continue
-
-                        # Get company info
-                        name = info.get('longName', symbol)
-                        industry_value = info.get('industry', 'Unknown')
-                        sector = info.get('sector', 'Unknown')
-                        market_cap = info.get('marketCap', 0)
-
-                        # Apply industry filter if specified
-                        if industry and industry.lower() != 'all' and industry_value.lower() != industry.lower():
-                            continue
-
-                        # Get latest news
-                        news = []
+                # Use yfinance to get stock data for major indices
+                if market == 'nasdaq':
+                    tickers = yf.Tickers('^IXIC')  # NASDAQ Composite
+                    index_data = tickers.tickers['^IXIC'].history(period='1d')
+                    logger.info(f"NASDAQ Composite current value: {index_data['Close'].iloc[-1]:.2f}")
+                else:
+                    tickers = yf.Tickers('^NYA')  # NYSE Composite
+                    index_data = tickers.tickers['^NYA'].history(period='1d')
+                    logger.info(f"NYSE Composite current value: {index_data['Close'].iloc[-1]:.2f}")
+                
+                # Get list of stocks from each market (this is an approximation)
+                if market == 'nasdaq':
+                    # Get NASDAQ 100 components as a representative sample
+                    ticker_data = yf.Ticker('^NDX')
+                    # Use the top holdings or components if available
+                    stock_list = [ticker.split('.')[0] for ticker in ticker_data.history(period='1d').index.get_level_values(0)]
+                else:
+                    # Use a selection of NYSE stocks
+                    stock_list = ['JPM', 'GS', 'MS', 'BAC', 'WFC', 'C', 'BLK', 'AXP', 'USB', 'PNC',
+                                 'GE', 'F', 'GM', 'XOM', 'CVX', 'COP', 'PXD', 'EOG', 'SLB', 'HAL']
+                
+                # For each stock, get its performance
+                market_losers = []
+                
+                # Process in batches to avoid API limitations
+                batch_size = 10
+                
+                for i in range(0, len(stock_list), batch_size):
+                    batch = stock_list[i:i+batch_size]
+                    
+                    # Skip empty batches
+                    if not batch:
+                        continue
+                    
+                    # Join tickers with a space for the batch request
+                    ticker_str = ' '.join(batch)
+                    multi_tickers = yf.Tickers(ticker_str)
+                    
+                    # Process each ticker in the batch
+                    for ticker_symbol in batch:
                         try:
-                            news_items = ticker.news[:5]  # Get up to 5 latest news items
-                            for item in news_items:
-                                news.append({
-                                    'title': item.get('title', ''),
-                                    'url': item.get('link', ''),
-                                    'publishedAt': item.get('published', ''),
-                                    'source': item.get('publisher', 'Yahoo Finance')
+                            if ticker_symbol not in multi_tickers.tickers:
+                                continue
+                                
+                            ticker = multi_tickers.tickers[ticker_symbol]
+                            
+                            # Get stock information
+                            ticker_info = ticker.info
+                            if not ticker_info:
+                                continue
+                                
+                            history = ticker.history(period='5d')
+                            if history.empty:
+                                continue
+                                
+                            # Calculate the percentage change
+                            current_price = history['Close'].iloc[-1]
+                            prev_price = history['Close'].iloc[-2] if len(history) > 1 else history['Close'].iloc[0]
+                            
+                            price_change = current_price - prev_price
+                            price_change_percent = (price_change / prev_price) * 100
+                            
+                            # Only include stocks that have declined
+                            if price_change_percent < 0:
+                                # Get additional stock info
+                                name = ticker_info.get('shortName', ticker_symbol)
+                                industry_value = ticker_info.get('industry', 'Unknown')
+                                sector = ticker_info.get('sector', 'Unknown')
+                                market_cap = ticker_info.get('marketCap', 0)
+                                
+                                # If there's an industry filter and this stock doesn't match, skip it
+                                if industry and industry.lower() != industry_value.lower():
+                                    continue
+                                
+                                # Get news for this stock
+                                news = []
+                                try:
+                                    stock_news = ticker.news[:3]  # Get up to 3 news items
+                                    for item in stock_news:
+                                        if isinstance(item, dict):
+                                            title = item.get('title', '')
+                                            link = item.get('link', '')
+                                            published = item.get('providerPublishTime', None)
+                                            
+                                            if published:
+                                                published_date = datetime.fromtimestamp(published).strftime('%Y-%m-%d %H:%M:%S')
+                                            else:
+                                                published_date = 'Unknown'
+                                                
+                                            news.append({
+                                                'title': title,
+                                                'url': link,
+                                                'publishedAt': published_date,
+                                                'source': item.get('publisher', 'Yahoo Finance')
+                                            })
+                                except Exception as e:
+                                    logger.error(f"Error getting news for {ticker_symbol}: {str(e)}")
+                                
+                                # Add to the market losers list
+                                market_losers.append({
+                                    'symbol': ticker_symbol,
+                                    'companyName': name,
+                                    'currentPrice': current_price,
+                                    'priceChange': price_change,
+                                    'priceChangePercent': price_change_percent,
+                                    'industry': industry_value,
+                                    'sector': sector,
+                                    'marketCap': market_cap,
+                                    'exchange': market.upper(),
+                                    'news': news,
+                                    'volume': history['Volume'].iloc[-1] if 'Volume' in history else 0,
+                                    'averageVolume': ticker_info.get('averageVolume', 0),
+                                    '52WeekLow': ticker_info.get('fiftyTwoWeekLow', 0),
+                                    '52WeekHigh': ticker_info.get('fiftyTwoWeekHigh', 0)
                                 })
                         except Exception as e:
-                            logger.error(f"Error getting news for {symbol}: {str(e)}")
-
-                        # Add to losers list
-                        all_losers.append({
-                            'symbol': symbol,
-                            'companyName': name,
-                            'currentPrice': round(current_price, 2),
-                            'priceChange': round(price_change, 2),
-                            'priceChangePercent': round(price_change_percent, 2),
-                            'industry': industry_value,
-                            'sector': sector,
-                            'marketCap': market_cap,
-                            'exchange': 'NYSE',
-                            'news': news,
-                            'volume': history['Volume'].iloc[-1],
-                            'averageVolume': info.get('averageVolume', 0),
-                            '52WeekLow': info.get('fiftyTwoWeekLow', 0),
-                            '52WeekHigh': info.get('fiftyTwoWeekHigh', 0)
-                        })
-
-                    except Exception as e:
-                        logger.error(f"Error processing {symbol}: {str(e)}")
-                        continue
-
+                            logger.error(f"Error processing ticker {ticker_symbol}: {str(e)}")
+                            continue
+                
+                # Sort market losers by percentage loss (ascending)
+                market_losers.sort(key=lambda x: x['priceChangePercent'])
+                
+                # Add to the combined list
+                all_losers.extend(market_losers)
+                
             except Exception as e:
-                logger.error(f"Error processing batch: {str(e)}")
-                continue
-
-        # Sort by percentage loss (ascending = biggest losses first)
+                logger.error(f"Error processing market {market}: {str(e)}")
+                traceback.print_exc()
+        
+        # Sort all losers by price change percent (ascending, biggest losers first)
         all_losers.sort(key=lambda x: x['priceChangePercent'])
-
-        return {
-            'success': True,
-            'data': all_losers[:limit],
-            'totalStocks': len(stock_list),
-            'processedStocks': len(all_losers)
-        }
-
+        
+        # Return the top losers up to the limit
+        return {'success': True, 'data': all_losers[:limit]}
+    
     except Exception as e:
         logger.error(f"Error getting top losers: {str(e)}")
         traceback.print_exc()
