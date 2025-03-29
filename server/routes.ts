@@ -18,6 +18,8 @@ import { browserScrapingService } from "./services/browserScrapingService";
 import { simpleBrowserService } from "./services/simpleBrowserService"; 
 import { localAnalysisService } from "./services/localAnalysisService";
 import { alphaVantageService } from "./services/alphaVantageService";
+import { googleNewsScrapingService } from "./services/googleNewsScrapingService";
+import { deepseekAiService } from "./services/deepseekAiService";
 import { getTopLosers, getDeepseekInfo } from "./services/yfinanceAdapter";
 import { spawn } from "child_process";
 import path from "path";
@@ -295,6 +297,72 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
   
   // Get top-rated stock analyses
+  // Get stock analysis using real-time Google News and DeepSeek AI
+  app.get("/api/analyses/ai/:symbol", async (req, res) => {
+    try {
+      const symbol = req.params.symbol;
+      
+      // Get the stock details
+      const stock = await storage.getStockBySymbol(symbol);
+      if (!stock) {
+        return res.status(404).json({ success: false, message: "Stock not found" });
+      }
+      
+      console.log(`Performing Google News scraping for ${symbol} (${stock.companyName})...`);
+      
+      // Scrape Google News for this stock
+      const newsArticles = await googleNewsScrapingService.scrapeGoogleNews(symbol, stock.companyName || '');
+      
+      if (!newsArticles || newsArticles.length === 0) {
+        return res.status(200).json({ 
+          success: false, 
+          message: `No recent news found for ${symbol}`,
+          data: {
+            potentialRating: 5,
+            summaryText: "No recent news available for analysis.",
+            predictedMovementDirection: "stable",
+            evidencePoints: [`No news articles found for ${symbol} (${stock.companyName})`],
+            source: "Google News",
+            analysisMethod: "DeepSeek AI"
+          }
+        });
+      }
+      
+      // Prepare news text for AI analysis
+      const newsText = googleNewsScrapingService.prepareNewsTextForAnalysis(newsArticles, symbol, stock.companyName || '');
+      
+      // Analyze news with DeepSeek AI
+      const analysisResult = await deepseekAiService.analyzeStockNews(stock, newsText);
+      
+      // Return the result with additional metadata
+      return res.status(200).json({
+        success: true,
+        data: {
+          ...analysisResult,
+          stock: {
+            symbol: stock.symbol,
+            companyName: stock.companyName,
+            currentPrice: stock.currentPrice,
+            priceChange: stock.priceChange,
+            priceChangePercent: stock.priceChangePercent
+          },
+          newsCount: newsArticles.length,
+          newsArticles: newsArticles.slice(0, 5), // Include up to 5 news items
+          source: "Google News",
+          analysisMethod: "DeepSeek AI",
+          analysisDate: new Date()
+        }
+      });
+    } catch (error) {
+      console.error("Error performing AI analysis:", error);
+      return res.status(500).json({ 
+        success: false, 
+        message: "Failed to perform AI analysis",
+        error: error instanceof Error ? error.message : String(error)
+      });
+    }
+  });
+
   app.get("/api/analyses/top", async (req, res) => {
     try {
       const limit = req.query.limit ? parseInt(req.query.limit as string) : 10;
@@ -573,6 +641,58 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error("Error fetching DeepSeek info:", error);
       return res.status(500).json({ success: false, message: "Failed to fetch DeepSeek information" });
+    }
+  });
+  
+  // Get Google News + AI Analysis for a specific stock
+  app.get('/api/analyses/ai/:symbol', async (req, res) => {
+    const symbol = req.params.symbol.toUpperCase();
+    const stock = await storage.getStockBySymbol(symbol);
+    
+    if (!stock) {
+      return res.status(404).json({
+        success: false,
+        message: `Stock with symbol ${symbol} not found`
+      });
+    }
+    
+    try {
+      console.log(`Generating AI analysis for ${symbol} (${stock.companyName})...`);
+      
+      // Get Google News articles
+      const newsArticles = await googleNewsScrapingService.scrapeGoogleNews(symbol, stock.companyName);
+      const newsText = googleNewsScrapingService.prepareNewsTextForAnalysis(newsArticles, symbol, stock.companyName);
+      
+      // Get AI Analysis from DeepSeek
+      const analysisResult = await deepseekAiService.analyzeStockNews(stock, newsText);
+      
+      // Combine results
+      const response = {
+        ...analysisResult,
+        stock: {
+          symbol: stock.symbol,
+          companyName: stock.companyName,
+          currentPrice: stock.currentPrice,
+          priceChange: stock.priceChange,
+          priceChangePercent: stock.priceChangePercent
+        },
+        newsCount: newsArticles.length,
+        newsArticles: newsArticles,
+        source: 'Google News',
+        analysisMethod: 'DeepSeek AI',
+        analysisDate: new Date().toISOString()
+      };
+      
+      return res.status(200).json({
+        success: true,
+        data: response
+      });
+    } catch (error) {
+      console.error(`Error generating AI analysis for ${symbol}:`, error);
+      return res.status(500).json({ 
+        success: false, 
+        message: `Could not generate AI analysis for ${symbol}: ${error.message}` 
+      });
     }
   });
   

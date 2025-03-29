@@ -11,7 +11,23 @@ import { Button } from '@/components/ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Separator } from '@/components/ui/separator';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
-import { Newspaper, ArrowDownIcon, SearchIcon, ExternalLink, Info, AlertTriangle, TrendingDown, TrendingUp, BarChart4, Activity } from 'lucide-react';
+import { Progress } from '@/components/ui/progress';
+import { 
+  Newspaper, 
+  ArrowDownIcon, 
+  SearchIcon, 
+  ExternalLink, 
+  Info, 
+  AlertTriangle, 
+  TrendingDown, 
+  TrendingUp, 
+  BarChart4, 
+  Activity, 
+  Brain, 
+  Target, 
+  ThumbsUp, 
+  ThumbsDown 
+} from 'lucide-react';
 import { Stock } from '@shared/schema';
 
 interface YFinanceStock {
@@ -34,6 +50,14 @@ interface YFinanceStock {
     publishedAt: string;
     source: string;
   }[];
+}
+
+interface GoogleNewsArticle {
+  title: string;
+  source: string;
+  url: string;
+  snippet?: string;
+  publishedTime?: string;
 }
 
 interface DeepSeekData {
@@ -63,6 +87,35 @@ interface DeepSeekData {
   sentiment: string;
 }
 
+interface AIAnalysisResult {
+  potentialRating: number;
+  summaryText: string;
+  predictedMovementDirection: 'up' | 'down' | 'stable';
+  breakingNewsCount?: number | null;
+  positiveNewsCount?: number | null;
+  negativeNewsCount?: number | null;
+  neutralNewsCount?: number | null;
+  priceTargets?: {
+    low: number | null;
+    high: number | null;
+  };
+  evidencePoints?: string[] | null;
+  shortTermOutlook?: string | null;
+  longTermOutlook?: string | null;
+  stock?: {
+    symbol: string;
+    companyName: string;
+    currentPrice: number;
+    priceChange: number;
+    priceChangePercent: number;
+  };
+  newsCount?: number;
+  newsArticles?: GoogleNewsArticle[];
+  source?: string;
+  analysisMethod?: string;
+  analysisDate?: string;
+}
+
 export default function BiggestLosersPage() {
   const [selectedIndustry, setSelectedIndustry] = useState<string>('all');
   const [searchTerm, setSearchTerm] = useState('');
@@ -70,6 +123,8 @@ export default function BiggestLosersPage() {
   const [selectedStock, setSelectedStock] = useState<string | null>(null);
   const [deepSeekData, setDeepSeekData] = useState<DeepSeekData | null>(null);
   const [loadingDeepSeek, setLoadingDeepSeek] = useState(false);
+  const [aiAnalysisResult, setAiAnalysisResult] = useState<AIAnalysisResult | null>(null);
+  const [loadingAiAnalysis, setLoadingAiAnalysis] = useState(false);
 
   // Fetch biggest losers data
   const { data, isLoading, error } = useQuery<{ 
@@ -113,10 +168,36 @@ export default function BiggestLosersPage() {
     }
   };
   
+  // Get Google News + DeepSeek AI Analysis for a stock
+  const getAiAnalysis = async (symbol: string) => {
+    setLoadingAiAnalysis(true);
+    setSelectedStock(symbol);
+    setAiAnalysisResult(null);
+    
+    try {
+      const response = await fetch(`/api/analyses/ai/${symbol}`);
+      const data = await response.json();
+      
+      if (data.success && data.data) {
+        console.log('AI Analysis result:', data.data);
+        setAiAnalysisResult(data.data);
+      } else {
+        console.error('AI Analysis error:', data.message || 'Unknown error');
+        setAiAnalysisResult(null);
+      }
+    } catch (error) {
+      console.error('Error fetching AI analysis:', error);
+      setAiAnalysisResult(null);
+    } finally {
+      setLoadingAiAnalysis(false);
+    }
+  };
+  
   // Function to close the DeepSeek modal
   const closeDeepSeekModal = () => {
     setSelectedStock(null);
     setDeepSeekData(null);
+    setAiAnalysisResult(null);
   };
 
   // Check if we have YFinance data
@@ -357,12 +438,12 @@ export default function BiggestLosersPage() {
                             size="sm"
                             onClick={(e) => {
                               e.preventDefault();
-                              getDeepseekInfo(stock.symbol);
+                              getAiAnalysis(stock.symbol);
                             }}
                             className="flex items-center"
                           >
-                            <Activity className="h-4 w-4 mr-2" />
-                            AI Analysis
+                            <Brain className="h-4 w-4 mr-2" />
+                            News Analysis
                           </Button>
                           <Button 
                             variant="outline" 
@@ -387,12 +468,12 @@ export default function BiggestLosersPage() {
                             size="sm" 
                             onClick={(e) => {
                               e.preventDefault();
-                              getDeepseekInfo(stock.symbol);
+                              getAiAnalysis(stock.symbol);
                             }}
                             className="flex items-center"
                           >
-                            <Activity className="h-4 w-4 mr-2" />
-                            AI Analysis
+                            <Brain className="h-4 w-4 mr-2" />
+                            News Analysis
                           </Button>
                           <Link href={`/dashboard/stock/${stock.symbol}`}>
                             <Button 
@@ -415,10 +496,266 @@ export default function BiggestLosersPage() {
         </div>
       )}
 
-      {/* DeepSeek AI Analysis Modal */}
+      {/* Google News + DeepSeek AI Analysis Modal */}
       <Dialog open={selectedStock !== null} onOpenChange={(open) => !open && closeDeepSeekModal()}>
         <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
-          {loadingDeepSeek ? (
+          {loadingAiAnalysis ? (
+            <div className="flex flex-col items-center justify-center py-12">
+              <Skeleton className="h-16 w-16 rounded-full" />
+              <p className="mt-4 text-muted-foreground">Loading Google News and AI analysis...</p>
+              <p className="text-xs text-muted-foreground mt-2">This may take a few seconds</p>
+            </div>
+          ) : aiAnalysisResult ? (
+            <>
+              <DialogHeader>
+                <div className="flex items-center justify-between">
+                  <div>
+                    <DialogTitle className="text-2xl flex items-center gap-2">
+                      {aiAnalysisResult.stock?.symbol}
+                      <span className="text-lg font-normal ml-2">{aiAnalysisResult.stock?.companyName}</span>
+                      <Badge 
+                        variant={
+                          aiAnalysisResult.predictedMovementDirection === 'up' 
+                            ? 'default' 
+                            : aiAnalysisResult.predictedMovementDirection === 'down' 
+                              ? 'destructive' 
+                              : 'outline'
+                        } 
+                        className="ml-2"
+                      >
+                        {aiAnalysisResult.predictedMovementDirection === 'up' 
+                          ? 'Positive' 
+                          : aiAnalysisResult.predictedMovementDirection === 'down' 
+                            ? 'Negative' 
+                            : 'Neutral'}
+                      </Badge>
+                    </DialogTitle>
+                    <DialogDescription className="mt-1">
+                      AI-powered news analysis from {aiAnalysisResult.source || 'Google News'} using {aiAnalysisResult.analysisMethod || 'DeepSeek AI'}
+                    </DialogDescription>
+                  </div>
+                  <div className="text-right">
+                    <div className="flex items-center justify-end">
+                      {(aiAnalysisResult.stock?.priceChangePercent || 0) < 0 ? (
+                        <TrendingDown className="h-5 w-5 text-destructive mr-1" />
+                      ) : (
+                        <TrendingUp className="h-5 w-5 text-green-500 mr-1" />
+                      )}
+                      <span className={`text-lg font-bold ${(aiAnalysisResult.stock?.priceChangePercent || 0) < 0 ? 'text-destructive' : 'text-green-500'}`}>
+                        {(aiAnalysisResult.stock?.priceChangePercent || 0).toFixed(2)}%
+                      </span>
+                      <span className="text-xs ml-1 text-muted-foreground">(daily)</span>
+                    </div>
+                    <p className="text-sm text-muted-foreground">
+                      ${(aiAnalysisResult.stock?.currentPrice || 0).toFixed(2)}
+                    </p>
+                  </div>
+                </div>
+              </DialogHeader>
+
+              <div className="mt-6 space-y-6">
+                {/* Potential Rating */}
+                <div>
+                  <div className="flex justify-between items-center mb-2">
+                    <h3 className="text-lg font-semibold">Investment Potential</h3>
+                    <span className="text-xl font-bold">{aiAnalysisResult.potentialRating}/10</span>
+                  </div>
+                  <Progress 
+                    value={aiAnalysisResult.potentialRating * 10} 
+                    className={`h-2 ${
+                      aiAnalysisResult.potentialRating >= 7 
+                        ? 'bg-green-500' 
+                        : aiAnalysisResult.potentialRating >= 4 
+                          ? 'bg-amber-500' 
+                          : 'bg-destructive'
+                    }`}
+                  />
+                  <p className="text-sm mt-3">{aiAnalysisResult.summaryText}</p>
+                </div>
+
+                <Separator />
+
+                {/* News Sentiment Analysis */}
+                <div>
+                  <h3 className="text-lg font-semibold mb-3">News Sentiment Analysis</h3>
+                  
+                  <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-4">
+                    {aiAnalysisResult.positiveNewsCount !== null && aiAnalysisResult.positiveNewsCount !== undefined && (
+                      <div className="flex flex-col items-center p-3 bg-muted/50 rounded-md">
+                        <ThumbsUp className="h-6 w-6 text-green-500 mb-1" />
+                        <span className="text-lg font-bold">{aiAnalysisResult.positiveNewsCount}</span>
+                        <span className="text-xs text-muted-foreground">Positive</span>
+                      </div>
+                    )}
+                    
+                    {aiAnalysisResult.negativeNewsCount !== null && aiAnalysisResult.negativeNewsCount !== undefined && (
+                      <div className="flex flex-col items-center p-3 bg-muted/50 rounded-md">
+                        <ThumbsDown className="h-6 w-6 text-destructive mb-1" />
+                        <span className="text-lg font-bold">{aiAnalysisResult.negativeNewsCount}</span>
+                        <span className="text-xs text-muted-foreground">Negative</span>
+                      </div>
+                    )}
+                    
+                    {aiAnalysisResult.neutralNewsCount !== null && aiAnalysisResult.neutralNewsCount !== undefined && (
+                      <div className="flex flex-col items-center p-3 bg-muted/50 rounded-md">
+                        <Info className="h-6 w-6 text-muted-foreground mb-1" />
+                        <span className="text-lg font-bold">{aiAnalysisResult.neutralNewsCount}</span>
+                        <span className="text-xs text-muted-foreground">Neutral</span>
+                      </div>
+                    )}
+                    
+                    {aiAnalysisResult.breakingNewsCount !== null && aiAnalysisResult.breakingNewsCount !== undefined && (
+                      <div className="flex flex-col items-center p-3 bg-muted/50 rounded-md">
+                        <AlertTriangle className="h-6 w-6 text-amber-500 mb-1" />
+                        <span className="text-lg font-bold">{aiAnalysisResult.breakingNewsCount}</span>
+                        <span className="text-xs text-muted-foreground">Breaking</span>
+                      </div>
+                    )}
+                  </div>
+
+                  {aiAnalysisResult.predictedMovementDirection && (
+                    <div className="flex items-center mb-3 bg-muted/30 p-3 rounded-md">
+                      {aiAnalysisResult.predictedMovementDirection === 'up' ? (
+                        <TrendingUp className="h-5 w-5 text-green-500 mr-2" />
+                      ) : aiAnalysisResult.predictedMovementDirection === 'down' ? (
+                        <TrendingDown className="h-5 w-5 text-destructive mr-2" />
+                      ) : (
+                        <Activity className="h-5 w-5 text-muted-foreground mr-2" />
+                      )}
+                      <div>
+                        <span className="font-medium">Predicted movement:</span>{' '}
+                        <span className={
+                          aiAnalysisResult.predictedMovementDirection === 'up' 
+                            ? 'text-green-500 font-semibold' 
+                            : aiAnalysisResult.predictedMovementDirection === 'down' 
+                              ? 'text-destructive font-semibold' 
+                              : ''
+                        }>
+                          {aiAnalysisResult.predictedMovementDirection.charAt(0).toUpperCase() + aiAnalysisResult.predictedMovementDirection.slice(1)}
+                        </span>
+                      </div>
+                    </div>
+                  )}
+
+                  {aiAnalysisResult.priceTargets && (aiAnalysisResult.priceTargets.low || aiAnalysisResult.priceTargets.high) && (
+                    <div className="mb-3 bg-muted/30 p-3 rounded-md">
+                      <span className="font-medium">Price targets:</span>
+                      <div className="flex gap-4 mt-1">
+                        {aiAnalysisResult.priceTargets.low !== null && (
+                          <div>
+                            <span className="text-xs text-muted-foreground">Low</span>
+                            <p className="font-medium">${aiAnalysisResult.priceTargets.low?.toFixed(2)}</p>
+                          </div>
+                        )}
+                        {aiAnalysisResult.priceTargets.high !== null && (
+                          <div>
+                            <span className="text-xs text-muted-foreground">High</span>
+                            <p className="font-medium">${aiAnalysisResult.priceTargets.high?.toFixed(2)}</p>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  )}
+                </div>
+
+                {/* Supporting Evidence */}
+                {aiAnalysisResult.evidencePoints && aiAnalysisResult.evidencePoints.length > 0 && (
+                  <>
+                    <Separator />
+                    <div>
+                      <h3 className="text-lg font-semibold mb-3">Key Evidence Points</h3>
+                      <div className="space-y-2">
+                        {aiAnalysisResult.evidencePoints.map((point, idx) => (
+                          <div key={idx} className="p-3 bg-muted/50 rounded-md text-sm">
+                            {point}
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  </>
+                )}
+
+                {/* Outlook */}
+                {(aiAnalysisResult.shortTermOutlook || aiAnalysisResult.longTermOutlook) && (
+                  <>
+                    <Separator />
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      {aiAnalysisResult.shortTermOutlook && (
+                        <div>
+                          <h3 className="text-md font-semibold mb-2">Short-Term Outlook</h3>
+                          <p className="text-sm">{aiAnalysisResult.shortTermOutlook}</p>
+                        </div>
+                      )}
+                      {aiAnalysisResult.longTermOutlook && (
+                        <div>
+                          <h3 className="text-md font-semibold mb-2">Long-Term Outlook</h3>
+                          <p className="text-sm">{aiAnalysisResult.longTermOutlook}</p>
+                        </div>
+                      )}
+                    </div>
+                  </>
+                )}
+
+                {/* News Articles */}
+                {aiAnalysisResult.newsArticles && aiAnalysisResult.newsArticles.length > 0 && (
+                  <>
+                    <Separator />
+                    <div>
+                      <h3 className="text-lg font-semibold flex items-center mb-3">
+                        <Newspaper className="h-5 w-5 mr-2" />
+                        Recent News ({aiAnalysisResult.newsCount || aiAnalysisResult.newsArticles.length})
+                      </h3>
+                      <div className="space-y-3">
+                        {aiAnalysisResult.newsArticles.map((news, idx) => (
+                          <div key={idx} className="pb-3 border-b last:border-0 last:pb-0">
+                            <a 
+                              href={news.url}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="font-medium hover:text-primary flex items-start"
+                            >
+                              <span className="flex-1">{news.title}</span>
+                              <ExternalLink className="h-4 w-4 ml-2 flex-shrink-0" />
+                            </a>
+                            {news.snippet && (
+                              <p className="text-sm text-muted-foreground mt-1">{news.snippet}</p>
+                            )}
+                            <div className="flex justify-between items-center mt-1">
+                              <span className="text-xs text-muted-foreground">
+                                {news.source}
+                              </span>
+                              {news.publishedTime && (
+                                <span className="text-xs text-muted-foreground">
+                                  {news.publishedTime}
+                                </span>
+                              )}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  </>
+                )}
+              </div>
+
+              <DialogFooter className="mt-6">
+                <Button variant="outline" onClick={closeDeepSeekModal}>
+                  Close
+                </Button>
+                <Button asChild>
+                  <a 
+                    href={`https://finance.yahoo.com/quote/${aiAnalysisResult.stock?.symbol}`} 
+                    target="_blank" 
+                    rel="noreferrer noopener"
+                    className="flex items-center"
+                  >
+                    <ExternalLink className="h-4 w-4 mr-2" />
+                    View on Yahoo Finance
+                  </a>
+                </Button>
+              </DialogFooter>
+            </>
+          ) : loadingDeepSeek ? (
             <div className="flex flex-col items-center justify-center py-12">
               <Skeleton className="h-16 w-16 rounded-full" />
               <p className="mt-4 text-muted-foreground">Loading AI analysis...</p>
