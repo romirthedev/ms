@@ -8,14 +8,24 @@ import fs from "fs";
 try {
   const envPath = path.resolve(process.cwd(), ".env");
   if (fs.existsSync(envPath)) {
-    const envConfig = fs.readFileSync(envPath, "utf8")
-      .split("\n")
-      .filter(line => line.trim() !== "" && !line.startsWith("#"))
-      .map(line => line.split("=").map(part => part.trim()));
-
-    for (const [key, value] of envConfig) {
-      if (value && !process.env[key]) {
-        process.env[key] = value;
+    const envContent = fs.readFileSync(envPath, "utf8");
+    const envLines = envContent.split("\n");
+    
+    for (const line of envLines) {
+      // Skip empty lines and comments
+      if (line.trim() === "" || line.trim().startsWith("#")) continue;
+      
+      // Find the first equals sign to split key and value
+      const equalSignIndex = line.indexOf("=");
+      if (equalSignIndex > 0) {
+        const key = line.substring(0, equalSignIndex).trim();
+        const value = line.substring(equalSignIndex + 1).trim();
+        
+        if (value && !process.env[key]) {
+          process.env[key] = value;
+          // Don't log sensitive values, just log that they were set
+          console.log(`Set environment variable: ${key}`);
+        }
       }
     }
     console.log("Environment variables loaded from .env file");

@@ -24,7 +24,7 @@ interface ExtendedStock extends Stock {
  * Uses OpenRouter to access the DeepSeek API
  */
 
-const OPENROUTER_API_KEY = process.env.XAI_API_KEY;
+// Don't cache API key at module load time, load it at runtime
 const DEEPSEEK_MODEL = "deepseek/deepseek-chat-v3-0324:free";
 
 interface StockAnalysisResult {
@@ -53,7 +53,11 @@ interface StockAnalysisResult {
 async function analyzeStockNews(stock: ExtendedStock, newsText: string): Promise<StockAnalysisResult> {
   console.log(`Analyzing news for ${stock.symbol} with DeepSeek AI...`);
   
-  if (!OPENROUTER_API_KEY) {
+  // Check environment variables at runtime, not module load time
+  const apiKey = process.env.XAI_API_KEY;
+  console.log('XAI_API_KEY status:', apiKey ? 'Found key (not showing value)' : 'Key not found');
+  
+  if (!apiKey) {
     throw new Error('OpenRouter API key is not configured. Please set XAI_API_KEY in environment variables.');
   }
   
@@ -106,7 +110,7 @@ Based on the news articles and current stock data above, provide your analysis i
     const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
       method: "POST",
       headers: {
-        "Authorization": `Bearer ${OPENROUTER_API_KEY}`,
+        "Authorization": `Bearer ${apiKey}`,
         "HTTP-Referer": "https://stocksense.ai",
         "X-Title": "StockSense AI",
         "Content-Type": "application/json"
@@ -145,7 +149,20 @@ Based on the news articles and current stock data above, provide your analysis i
     
     // Parse the JSON response
     try {
-      const analysisResult: StockAnalysisResult = JSON.parse(aiResponse);
+      // Clean up the response if it contains markdown code blocks
+      let cleanResponse = aiResponse;
+      if (aiResponse.includes('```json')) {
+        // Extract JSON from markdown code block
+        const jsonStart = aiResponse.indexOf('{');
+        const jsonEnd = aiResponse.lastIndexOf('}') + 1;
+        
+        if (jsonStart >= 0 && jsonEnd > jsonStart) {
+          cleanResponse = aiResponse.substring(jsonStart, jsonEnd);
+        }
+      }
+      
+      console.log(`Processing cleaned response for ${stock.symbol}`);
+      const analysisResult: StockAnalysisResult = JSON.parse(cleanResponse);
       
       // Ensure we have valid values for required fields
       analysisResult.potentialRating = Math.max(1, Math.min(10, analysisResult.potentialRating || 5));
