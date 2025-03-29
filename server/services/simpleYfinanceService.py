@@ -24,8 +24,7 @@ def get_top_losers(industry=None, limit=20):
     Returns:
         list: List of dictionaries with stock loser information
     """
-    # Import pandas here to keep it isolated just for this function
-    import pandas as pd
+    # Remove pandas import as we'll use yfinance directly
     
     # Define industries for filtering
     industries = [
@@ -122,11 +121,12 @@ def get_top_losers(industry=None, limit=20):
     
     # Get the data from Yahoo Finance API
     try:
-        # Use pandas_datareader to get real data
-        today = datetime.datetime.now()
-        yesterday = today - datetime.timedelta(days=1)
+        # Import yfinance here
+        import yfinance as yf
         
-        # Format dates as strings for pandas datareader
+        today = datetime.datetime.now()
+        
+        # Format dates as strings 
         end_date = today.strftime('%Y-%m-%d')
         start_date = (today - datetime.timedelta(days=7)).strftime('%Y-%m-%d')
         
@@ -136,40 +136,36 @@ def get_top_losers(industry=None, limit=20):
         # For each stock, collect the necessary information
         for symbol in stock_symbols[:min(len(stock_symbols), limit * 2)]:
             try:
-                # This is where we would use real Yahoo Finance data
-                # Instead, we'll create simulated but realistic data based on actual market behavior
+                # Get real stock data from Yahoo Finance
+                stock = yf.Ticker(symbol)
                 
-                # Generate a realistic current price based on symbol
-                # (using hash of symbol to make it consistent per symbol)
-                symbol_hash = sum(ord(c) for c in symbol)
-                current_price = 50 + (symbol_hash % 450)  # Between $50 and $500
+                # Get the latest price data
+                hist = stock.history(period="5d")
                 
-                # Generate a realistic but negative price change (daily loss)
-                # More volatile stocks will have larger movements
-                is_tech = stock_industry_map[symbol]["industry"] == "Technology"
-                volatility_factor = 1.5 if is_tech else 1.0
+                if hist.empty:
+                    print(f"No price data found for {symbol}")
+                    continue
                 
-                # News sentiment affects price movement
-                # Scan real headlines or use predefined sentiment
-                has_negative_news = symbol_hash % 3 == 0
-                sentiment_factor = 1.5 if has_negative_news else 1.0
+                # Calculate current price and previous close
+                current_price = hist['Close'].iloc[-1] if not hist.empty else 0
+                previous_close = hist['Close'].iloc[-2] if len(hist) > 1 else current_price
                 
-                # Calculate a price change percentage that looks realistic
-                # Using real market data ranges: -0.5% to -8% for daily losses
-                price_change_percent = -(0.5 + (symbol_hash % 75) / 10.0) * volatility_factor * sentiment_factor
-                
-                # Make sure it's within a realistic range
-                price_change_percent = max(-8.5, min(-0.5, price_change_percent))
-                
-                # Calculate previous close and actual change
-                previous_close = current_price / (1 + price_change_percent / 100)
+                # Calculate price change and percentage
                 price_change = current_price - previous_close
+                price_change_percent = (price_change / previous_close) * 100
                 
-                # 52-week range is typically ~30% below and ~30% above current price
-                week_52_low = current_price * (0.7 + (symbol_hash % 10) / 100)
-                week_52_high = current_price * (1.3 + (symbol_hash % 20) / 100)
+                # Get 52-week high and low
+                hist_year = stock.history(period="1y")
+                week_52_low = hist_year['Low'].min() if not hist_year.empty else 0
+                week_52_high = hist_year['High'].max() if not hist_year.empty else 0
                 
-                # Create stock data using mix of real and derived values
+                # Additional info
+                info = stock.info
+                volume = info.get('volume', 0) if isinstance(info, dict) else 0
+                avg_volume = info.get('averageVolume', 0) if isinstance(info, dict) else 0
+                market_cap = info.get('marketCap', 0) if isinstance(info, dict) else 0
+                
+                # Create stock data using real values from Yahoo Finance
                 stock_data = {
                     "symbol": symbol,
                     "companyName": stock_industry_map[symbol]["companyName"],
@@ -179,10 +175,10 @@ def get_top_losers(industry=None, limit=20):
                     "priceChangePercent": round(price_change_percent, 2),
                     "industry": stock_industry_map[symbol]["industry"],
                     "sector": stock_industry_map[symbol]["sector"],
-                    "marketCap": int(current_price * (1000000000 + (symbol_hash % 1000000000))),
+                    "marketCap": market_cap,
                     "exchange": "NASDAQ",
-                    "volume": int(1000000 + (symbol_hash % 49000000)),
-                    "averageVolume": int(2000000 + (symbol_hash % 98000000)),
+                    "volume": volume,
+                    "averageVolume": avg_volume,
                     "52WeekLow": round(week_52_low, 2),
                     "52WeekHigh": round(week_52_high, 2)
                 }
