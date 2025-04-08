@@ -24,102 +24,6 @@ def get_top_losers(industry=None, limit=20):
     Returns:
         list: List of dictionaries with stock loser information
     """
-    # Remove pandas import as we'll use yfinance directly
-    
-    # Define industries for filtering
-    industries = [
-        "Technology", 
-        "Healthcare", 
-        "Financial Services", 
-        "Consumer Cyclical",
-        "Communication Services",
-        "Industrials",
-        "Consumer Defensive",
-        "Energy",
-        "Utilities",
-        "Real Estate",
-        "Basic Materials"
-    ]
-    
-    # Map of stock symbols to their industry and sector information
-    # This is necessary because Yahoo Finance doesn't directly provide industry/sector
-    stock_industry_map = {
-        "AAPL": {"companyName": "Apple Inc.", "industry": "Technology", "sector": "Consumer Electronics"},
-        "MSFT": {"companyName": "Microsoft Corporation", "industry": "Technology", "sector": "Software"},
-        "AMZN": {"companyName": "Amazon.com Inc.", "industry": "Consumer Cyclical", "sector": "Internet Retail"},
-        "GOOGL": {"companyName": "Alphabet Inc.", "industry": "Communication Services", "sector": "Internet Content & Information"},
-        "TSLA": {"companyName": "Tesla Inc.", "industry": "Consumer Cyclical", "sector": "Auto Manufacturers"},
-        "NVDA": {"companyName": "NVIDIA Corporation", "industry": "Technology", "sector": "Semiconductors"},
-        "META": {"companyName": "Meta Platforms Inc.", "industry": "Communication Services", "sector": "Internet Content & Information"},
-        "NFLX": {"companyName": "Netflix Inc.", "industry": "Communication Services", "sector": "Entertainment"},
-        "PYPL": {"companyName": "PayPal Holdings Inc.", "industry": "Financial Services", "sector": "Credit Services"},
-        "INTC": {"companyName": "Intel Corporation", "industry": "Technology", "sector": "Semiconductors"},
-        "CSCO": {"companyName": "Cisco Systems Inc.", "industry": "Technology", "sector": "Communication Equipment"},
-        "ADBE": {"companyName": "Adobe Inc.", "industry": "Technology", "sector": "Software"},
-        "CMCSA": {"companyName": "Comcast Corporation", "industry": "Communication Services", "sector": "Entertainment"},
-        "PEP": {"companyName": "PepsiCo Inc.", "industry": "Consumer Defensive", "sector": "Beverages - Non-Alcoholic"},
-        "AVGO": {"companyName": "Broadcom Inc.", "industry": "Technology", "sector": "Semiconductors"},
-        "TXN": {"companyName": "Texas Instruments Incorporated", "industry": "Technology", "sector": "Semiconductors"},
-        "COST": {"companyName": "Costco Wholesale Corporation", "industry": "Consumer Defensive", "sector": "Discount Stores"},
-        "TMUS": {"companyName": "T-Mobile US Inc.", "industry": "Communication Services", "sector": "Telecom Services"},
-        "DHR": {"companyName": "Danaher Corporation", "industry": "Healthcare", "sector": "Diagnostics & Research"},
-        "AMAT": {"companyName": "Applied Materials Inc.", "industry": "Technology", "sector": "Semiconductor Equipment & Materials"},
-        "AMGN": {"companyName": "Amgen Inc.", "industry": "Healthcare", "sector": "Biotechnology"},
-        "SBUX": {"companyName": "Starbucks Corporation", "industry": "Consumer Cyclical", "sector": "Restaurants"},
-        "QCOM": {"companyName": "QUALCOMM Incorporated", "industry": "Technology", "sector": "Semiconductors"},
-        "AMD": {"companyName": "Advanced Micro Devices Inc.", "industry": "Technology", "sector": "Semiconductors"},
-        "SHOP": {"companyName": "Shopify Inc.", "industry": "Technology", "sector": "Software - Application"},
-        "UBER": {"companyName": "Uber Technologies, Inc.", "industry": "Technology", "sector": "Software - Application"},
-        "ZM": {"companyName": "Zoom Video Communications Inc.", "industry": "Technology", "sector": "Software - Application"},
-        "ROKU": {"companyName": "Roku Inc.", "industry": "Communication Services", "sector": "Entertainment"},
-        "DDOG": {"companyName": "Datadog Inc.", "industry": "Technology", "sector": "Software - Application"},
-        "ABNB": {"companyName": "Airbnb Inc.", "industry": "Consumer Cyclical", "sector": "Travel Services"},
-        "COIN": {"companyName": "Coinbase Global Inc.", "industry": "Financial Services", "sector": "Financial Data & Stock Exchanges"},
-        "RBLX": {"companyName": "Roblox Corporation", "industry": "Communication Services", "sector": "Electronic Gaming & Multimedia"},
-        "SQ": {"companyName": "Block Inc.", "industry": "Financial Services", "sector": "Software - Infrastructure"},
-        "ETSY": {"companyName": "Etsy Inc.", "industry": "Consumer Cyclical", "sector": "Internet Retail"},
-        "MTTR": {"companyName": "Matterport Inc.", "industry": "Technology", "sector": "Software - Application"},
-        "ME": {"companyName": "23andMe Holding Co.", "industry": "Healthcare", "sector": "Diagnostics & Research"},
-        "DKNG": {"companyName": "DraftKings Inc.", "industry": "Consumer Cyclical", "sector": "Gambling"},
-        "NET": {"companyName": "Cloudflare Inc.", "industry": "Technology", "sector": "Software - Infrastructure"},
-        "MDB": {"companyName": "MongoDB Inc.", "industry": "Technology", "sector": "Software - Infrastructure"},
-        "SNOW": {"companyName": "Snowflake Inc.", "industry": "Technology", "sector": "Software - Infrastructure"},
-        "SOFI": {"companyName": "SoFi Technologies Inc.", "industry": "Financial Services", "sector": "Credit Services"},
-        "TWLO": {"companyName": "Twilio Inc.", "industry": "Technology", "sector": "Software - Infrastructure"},
-        "OKTA": {"companyName": "Okta Inc.", "industry": "Technology", "sector": "Software - Infrastructure"},
-        "FSLY": {"companyName": "Fastly Inc.", "industry": "Technology", "sector": "Software - Infrastructure"},
-        "ZS": {"companyName": "Zscaler Inc.", "industry": "Technology", "sector": "Software - Infrastructure"},
-        "FTNT": {"companyName": "Fortinet Inc.", "industry": "Technology", "sector": "Software - Infrastructure"},
-        "PANW": {"companyName": "Palo Alto Networks Inc.", "industry": "Technology", "sector": "Software - Infrastructure"},
-        "PATH": {"companyName": "UiPath Inc.", "industry": "Technology", "sector": "Software - Infrastructure"},
-        "U": {"companyName": "Unity Software Inc.", "industry": "Technology", "sector": "Software - Application"},
-        "TOST": {"companyName": "Toast Inc.", "industry": "Technology", "sector": "Software - Application"},
-        "DOCN": {"companyName": "DigitalOcean Holdings Inc.", "industry": "Technology", "sector": "Software - Infrastructure"},
-        "SFIX": {"companyName": "Stitch Fix Inc.", "industry": "Consumer Cyclical", "sector": "Specialty Retail"},
-        "CLOV": {"companyName": "Clover Health Investments Corp.", "industry": "Healthcare", "sector": "Healthcare Plans"},
-        "WISH": {"companyName": "ContextLogic Inc.", "industry": "Consumer Cyclical", "sector": "Internet Retail"},
-        "DNA": {"companyName": "Ginkgo Bioworks Holdings Inc.", "industry": "Healthcare", "sector": "Biotechnology"},
-        "ASTS": {"companyName": "AST SpaceMobile Inc.", "industry": "Technology", "sector": "Telecom Services"}
-    }
-    
-    # Use this list of symbols to get real data
-    stock_symbols = list(stock_industry_map.keys())
-    
-    # Filter by industry if specified
-    if industry and industry != "all":
-        stock_symbols = [symbol for symbol, info in stock_industry_map.items() 
-                        if info["industry"] == industry]
-    
-    # If no stocks match the industry filter, return empty results
-    if not stock_symbols:
-        return {
-            "success": True,
-            "data": [],
-            "industries": industries,
-            "message": "No stocks found for the specified industry"
-        }
-    
-    # Get the data from Yahoo Finance API
     try:
         # Import yfinance here
         import yfinance as yf
@@ -130,70 +34,115 @@ def get_top_losers(industry=None, limit=20):
         end_date = today.strftime('%Y-%m-%d')
         start_date = (today - datetime.timedelta(days=7)).strftime('%Y-%m-%d')
         
+        # Get NYSE Composite index data
+        nyse_ticker = yf.Ticker('^NYA')
+        nyse_data = nyse_ticker.history(period='1d')
+        
+        # Get all NYSE stocks using the NYSE Composite components
+        stock_list = nyse_ticker.components
+        
+        if not stock_list:
+            # Fallback to a broader list if components not available
+            stock_list = nyse_ticker.history(period='1d').index.get_level_values(0)
+        
+        # Remove any non-stock symbols and clean up the list
+        stock_list = [ticker.split('.')[0] for ticker in stock_list if '.' not in ticker]
+        print(f"Found {len(stock_list)} NYSE stocks")
+        
+        # Filter by industry if specified
+        if industry and industry != "all":
+            filtered_stocks = []
+            for symbol in stock_list:
+                try:
+                    stock = yf.Ticker(symbol)
+                    info = stock.info
+                    if info.get('industry', '').lower() == industry.lower():
+                        filtered_stocks.append(symbol)
+                except:
+                    continue
+            stock_list = filtered_stocks
+        
         # Create result data using actual stock information
         results = []
         
-        # For each stock, collect the necessary information
-        for symbol in stock_symbols[:min(len(stock_symbols), limit * 2)]:
-            try:
-                # Get real stock data from Yahoo Finance
-                stock = yf.Ticker(symbol)
-                
-                # Get the latest price data
-                hist = stock.history(period="5d")
-                
-                if hist.empty:
-                    print(f"No price data found for {symbol}")
-                    continue
-                
-                # Calculate current price and previous close
-                current_price = hist['Close'].iloc[-1] if not hist.empty else 0
-                previous_close = hist['Close'].iloc[-2] if len(hist) > 1 else current_price
-                
-                # Calculate price change and percentage
-                price_change = current_price - previous_close
-                price_change_percent = (price_change / previous_close) * 100
-                
-                # Get 52-week high and low
-                hist_year = stock.history(period="1y")
-                week_52_low = hist_year['Low'].min() if not hist_year.empty else 0
-                week_52_high = hist_year['High'].max() if not hist_year.empty else 0
-                
-                # Additional info
-                info = stock.info
-                volume = info.get('volume', 0) if isinstance(info, dict) else 0
-                avg_volume = info.get('averageVolume', 0) if isinstance(info, dict) else 0
-                market_cap = info.get('marketCap', 0) if isinstance(info, dict) else 0
-                
-                # Create stock data using real values from Yahoo Finance
-                stock_data = {
-                    "symbol": symbol,
-                    "companyName": stock_industry_map[symbol]["companyName"],
-                    "currentPrice": round(current_price, 2),
-                    "previousClose": round(previous_close, 2),
-                    "priceChange": round(price_change, 2),
-                    "priceChangePercent": round(price_change_percent, 2),
-                    "industry": stock_industry_map[symbol]["industry"],
-                    "sector": stock_industry_map[symbol]["sector"],
-                    "marketCap": market_cap,
-                    "exchange": "NASDAQ",
-                    "volume": volume,
-                    "averageVolume": avg_volume,
-                    "52WeekLow": round(week_52_low, 2),
-                    "52WeekHigh": round(week_52_high, 2)
-                }
-                
-                # Add news for each stock
-                stock_data["news"] = generate_news_for_stock(
-                    stock_industry_map[symbol]["companyName"], 
-                    symbol, 
-                    today
-                )
-                
-                results.append(stock_data)
-            except Exception as e:
-                print(f"Error fetching data for {symbol}: {str(e)}")
+        # Process stocks in batches to avoid API limitations
+        batch_size = 10
+        for i in range(0, len(stock_list), batch_size):
+            batch = stock_list[i:i+batch_size]
+            
+            # Skip empty batches
+            if not batch:
                 continue
+                
+            # Join tickers with a space for the batch request
+            ticker_str = ' '.join(batch)
+            multi_tickers = yf.Tickers(ticker_str)
+            
+            # Process each ticker in the batch
+            for symbol in batch:
+                try:
+                    # Get real stock data from Yahoo Finance
+                    stock = multi_tickers.tickers[symbol]
+                    
+                    # Get the latest price data
+                    hist = stock.history(period="5d")
+                    
+                    if hist.empty:
+                        print(f"No price data found for {symbol}")
+                        continue
+                    
+                    # Calculate current price and previous close
+                    current_price = hist['Close'].iloc[-1] if not hist.empty else 0
+                    previous_close = hist['Close'].iloc[-2] if len(hist) > 1 else current_price
+                    
+                    # Calculate price change and percentage
+                    price_change = current_price - previous_close
+                    price_change_percent = (price_change / previous_close) * 100
+                    
+                    # Only include stocks that are down
+                    if price_change_percent >= 0:
+                        continue
+                    
+                    # Get 52-week high and low
+                    hist_year = stock.history(period="1y")
+                    week_52_low = hist_year['Low'].min() if not hist_year.empty else 0
+                    week_52_high = hist_year['High'].max() if not hist_year.empty else 0
+                    
+                    # Additional info
+                    info = stock.info
+                    volume = info.get('volume', 0) if isinstance(info, dict) else 0
+                    avg_volume = info.get('averageVolume', 0) if isinstance(info, dict) else 0
+                    market_cap = info.get('marketCap', 0) if isinstance(info, dict) else 0
+                    
+                    # Create stock data using real values from Yahoo Finance
+                    stock_data = {
+                        "symbol": symbol,
+                        "companyName": info.get('longName', symbol),
+                        "currentPrice": round(current_price, 2),
+                        "previousClose": round(previous_close, 2),
+                        "priceChange": round(price_change, 2),
+                        "priceChangePercent": round(price_change_percent, 2),
+                        "industry": info.get('industry', ''),
+                        "sector": info.get('sector', ''),
+                        "marketCap": market_cap,
+                        "exchange": "NYSE",
+                        "volume": volume,
+                        "averageVolume": avg_volume,
+                        "52WeekLow": round(week_52_low, 2),
+                        "52WeekHigh": round(week_52_high, 2)
+                    }
+                    
+                    # Add news for each stock
+                    stock_data["news"] = generate_news_for_stock(
+                        stock_data["companyName"], 
+                        symbol, 
+                        today
+                    )
+                    
+                    results.append(stock_data)
+                except Exception as e:
+                    print(f"Error fetching data for {symbol}: {str(e)}")
+                    continue
         
         # Sort by price change percent (ascending to get biggest losers first)
         results.sort(key=lambda x: x["priceChangePercent"])
@@ -204,19 +153,17 @@ def get_top_losers(industry=None, limit=20):
         return {
             "success": True,
             "data": results,
-            "industries": industries,
+            "industries": list(set(stock["industry"] for stock in results if stock["industry"])),
             "source": "yfinance",
             "message": "Retrieved top stock losers"
         }
     except Exception as e:
-        # If there's an error, fall back to a smaller dataset
+        # If there's an error, return error message
         print(f"Error fetching Yahoo Finance data: {str(e)}")
-        
-        # Return error message
         return {
             "success": False,
             "data": [],
-            "industries": industries,
+            "industries": [],
             "message": f"Error retrieving stock data: {str(e)}"
         }
 

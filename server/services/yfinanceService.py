@@ -7,6 +7,7 @@ import os
 import traceback
 from datetime import datetime, timedelta
 import logging
+from urllib.request import urlopen
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -28,142 +29,146 @@ def get_top_losers(industry=None, limit=20):
         today = datetime.now()
         yesterday = today - timedelta(days=1)
 
-        # Format dates as YYYY-MM-DD
-        today_str = today.strftime('%Y-%m-%d')
-        yesterday_str = yesterday.strftime('%Y-%m-%d')
+        logger.info(f"Fetching top losers for {today.strftime('%Y-%m-%d')}")
 
-        logger.info(f"Fetching top losers for {today_str}")
-
-        # Markets we're interested in
-        markets = ['nasdaq', 'nyse']
-        all_losers = []
-
-        # Fetch losers from each market
-        for market in markets:
+        # Use the screener API to get the biggest losers directly
+        try:
+            # Get top losers from Yahoo Finance screener
+            url = "https://query2.finance.yahoo.com/v1/finance/screener/predefined/saved?formatted=true&lang=en-US&region=US&scrIds=day_losers&count=500"
+            
+            response = urlopen(url)
+            data = json.loads(response.read())
+            
+            quotes = data['finance']['result'][0]['quotes']
+            symbols = [quote.get('symbol', '') for quote in quotes if quote.get('symbol', '')]
+            
+            # Get all stock data at once using yfinance
             try:
-                # Use yfinance to get stock data for major indices
-                if market == 'nasdaq':
-                    tickers = yf.Tickers('^IXIC')  # NASDAQ Composite
-                    index_data = tickers.tickers['^IXIC'].history(period='1d')
-                    logger.info(f"NASDAQ Composite current value: {index_data['Close'].iloc[-1]:.2f}")
-                else:
-                    tickers = yf.Tickers('^NYA')  # NYSE Composite
-                    index_data = tickers.tickers['^NYA'].history(period='1d')
-                    logger.info(f"NYSE Composite current value: {index_data['Close'].iloc[-1]:.2f}")
-
-                # Get list of stocks from each market (this is an approximation)
-                if market == 'nasdaq':
-                    # Get NASDAQ 100 components as a representative sample
-                    ticker_data = yf.Ticker('^NDX')
-                    # Use the top holdings or components if available
-                    stock_list = [ticker.split('.')[0] for ticker in ticker_data.history(period='1d').index.get_level_values(0)]
-                else:
-                    # Use a selection of NYSE stocks
-                    stock_list = ['JPM', 'GS', 'MS', 'BAC', 'WFC', 'C', 'BLK', 'AXP', 'USB', 'PNC',
-                                 'GE', 'F', 'GM', 'XOM', 'CVX', 'COP', 'PXD', 'EOG', 'SLB', 'HAL']
-
-                # For each stock, get its performance
-                market_losers = []
-
-                # Process in batches to avoid API limitations
-                batch_size = 10
-
-                for i in range(0, len(stock_list), batch_size):
-                    batch = stock_list[i:i+batch_size]
-
-                    # Skip empty batches
-                    if not batch:
+                # Download data in batches of 50 symbols
+                batch_size = 50
+                stock_data = {}
+                
+                for i in range(0, len(symbols), batch_size):
+                    batch = symbols[i:i + batch_size]
+                    try:
+                        batch_data = yf.download(batch, period='2d', group_by='ticker')
+                        stock_data.update(batch_data)
+                    except Exception as e:
+                        logger.error(f"Error downloading batch {i//batch_size + 1}: {str(e)}")
+                        # Continue with next batch even if one fails
                         continue
-
-                    # Join tickers with a space for the batch request
-                    ticker_str = ' '.join(batch)
-                    multi_tickers = yf.Tickers(ticker_str)
-
-                    # Process each ticker in the batch
-                    for ticker_symbol in batch:
-                        try:
-                            # Get ticker info and history
-                            ticker = multi_tickers.tickers[ticker_symbol]
-                            history = ticker.history(period='1d')
-
-                            if history.empty:
-                                logger.warning(f"No history data for {ticker_symbol}")
-                                continue
-
-                            # Get current price and calculate change
-                            current_price = history['Close'].iloc[-1]
-                            price_change = history['Close'].iloc[-1] - history['Open'].iloc[0]
-                            price_change_percent = (price_change / history['Open'].iloc[0]) * 100
-
-                            # Only include stocks that are down
-                            if price_change_percent >= 0:
-                                continue
-
-                            # Get additional info
-                            ticker_info = ticker.info
-                            name = ticker_info.get('longName', ticker_symbol)
-                            industry_value = ticker_info.get('industry', '')
-                            sector = ticker_info.get('sector', '')
-                            market_cap = ticker_info.get('marketCap', 0)
-
-                            # Filter by industry if specified
-                            if industry and industry != 'all' and industry_value.lower() != industry.lower():
-                                continue
-
-                            # Get news for the stock
-                            news = []
+                
+                all_losers = []
+                for symbol in symbols:
+                    try:
+                        # Get detailed info using yfinance
+                        ticker = yf.Ticker(symbol)
+                        ticker_info = ticker.info
+                        
+                        # Skip if we can't get the info
+                        if not ticker_info:
+                            continue
+                            
+                        # Get market
+                        exchange = ticker_info.get('exchange', '').upper()
+                        if 'NYSE' not in exchange and 'NASDAQ' not in exchange:
+                            continue
+                            
+                        # Get price data from downloaded data
+                        if symbol in stock_data:
+                            current_price = stock_data[symbol]['Close'].iloc[-1]
+                            previous_close = stock_data[symbol]['Close'].iloc[0]
+                            price_change = current_price - previous_close
+                            price_change_percent = (price_change / previous_close) * 100
+                            
+                            # Get additional market data
+                            volume = stock_data[symbol]['Volume'].iloc[-1]
+                            high = stock_data[symbol]['High'].max()
+                            low = stock_data[symbol]['Low'].min()
+                        else:
+                            # Fallback to individual ticker data if not in bulk download
                             try:
-                                news_items = ticker.news[:3]  # Get up to 3 news items
-                                for item in news_items:
-                                    title = item.get('title', '')
-                                    link = item.get('link', '')
-                                    published_date = item.get('providerPublishTime', '')
-
-                                    news.append({
-                                        'title': title,
-                                        'url': link,
-                                        'publishedAt': published_date,
-                                        'source': item.get('publisher', 'Yahoo Finance')
-                                    })
+                                hist = ticker.history(period='2d')
+                                if not hist.empty and len(hist) >= 2:
+                                    current_price = hist['Close'].iloc[-1]
+                                    previous_close = hist['Close'].iloc[0]
+                                    price_change = current_price - previous_close
+                                    price_change_percent = (price_change / previous_close) * 100
+                                    volume = hist['Volume'].iloc[-1]
+                                    high = hist['High'].max()
+                                    low = hist['Low'].min()
+                                else:
+                                    continue
                             except Exception as e:
-                                logger.error(f"Error getting news for {ticker_symbol}: {str(e)}")
-
-                            # Add to the market losers list
-                            market_losers.append({
-                                'symbol': ticker_symbol,
-                                'companyName': name,
-                                'currentPrice': current_price,
-                                'priceChange': price_change,
-                                'priceChangePercent': price_change_percent,
-                                'industry': industry_value,
-                                'sector': sector,
-                                'marketCap': market_cap,
-                                'exchange': market.upper(),
-                                'news': news,
-                                'volume': history['Volume'].iloc[-1] if 'Volume' in history else 0,
-                                'averageVolume': ticker_info.get('averageVolume', 0),
-                                '52WeekLow': ticker_info.get('fiftyTwoWeekLow', 0),
-                                '52WeekHigh': ticker_info.get('fiftyTwoWeekHigh', 0)
-                            })
-                        except Exception as e:
-                            logger.error(f"Error processing ticker {ticker_symbol}: {str(e)}")
+                                logger.error(f"Error getting individual data for {symbol}: {str(e)}")
+                                continue
+                            
+                        # Skip if price data is invalid
+                        if not current_price or not previous_close:
+                            continue
+                        
+                        # Get industry info
+                        industry_value = ticker_info.get('industry', '')
+                        sector = ticker_info.get('sector', '')
+                        
+                        # Filter by industry if specified
+                        if industry and industry != 'all' and industry_value.lower() != industry.lower():
                             continue
 
-                # Sort market losers by percentage loss (ascending)
-                market_losers.sort(key=lambda x: x['priceChangePercent'])
+                        # Get news for the stock
+                        news = []
+                        try:
+                            news_items = ticker.news[:3]  # Get up to 3 news items
+                            for item in news_items:
+                                title = item.get('title', '')
+                                link = item.get('link', '')
+                                published_date = item.get('providerPublishTime', '')
 
-                # Add to the combined list
-                all_losers.extend(market_losers)
+                                news.append({
+                                    'title': title,
+                                    'url': link,
+                                    'publishedAt': published_date,
+                                    'source': item.get('publisher', 'Yahoo Finance')
+                                })
+                        except Exception as e:
+                            logger.error(f"Error getting news for {symbol}: {str(e)}")
+
+                        # Add to the losers list
+                        all_losers.append({
+                            'symbol': symbol,
+                            'companyName': ticker_info.get('longName', symbol),
+                            'currentPrice': current_price,
+                            'priceChange': price_change,
+                            'priceChangePercent': price_change_percent,
+                            'industry': industry_value,
+                            'sector': sector,
+                            'marketCap': ticker_info.get('marketCap', 0),
+                            'exchange': exchange,
+                            'news': news,
+                            'volume': volume,
+                            'high': high,
+                            'low': low,
+                            'averageVolume': ticker_info.get('averageVolume', 0),
+                            '52WeekLow': ticker_info.get('fiftyTwoWeekLow', 0),
+                            '52WeekHigh': ticker_info.get('fiftyTwoWeekHigh', 0)
+                        })
+                    except Exception as e:
+                        logger.error(f"Error processing quote {symbol}: {str(e)}")
+                        continue
 
             except Exception as e:
-                logger.error(f"Error processing market {market}: {str(e)}")
-                traceback.print_exc()
+                logger.error(f"Error downloading stock data: {str(e)}")
+                raise
 
-        # Sort all losers by price change percent (ascending, biggest losers first)
-        all_losers.sort(key=lambda x: x['priceChangePercent'])
+            # Sort all losers by price change percent (ascending, biggest losers first)
+            all_losers.sort(key=lambda x: x['priceChangePercent'])
 
-        # Return the top losers up to the limit
-        return {'success': True, 'data': all_losers[:limit]}
+            # Return the top losers up to the limit
+            return {'success': True, 'data': all_losers[:limit]}
+
+        except Exception as e:
+            logger.error(f"Error using screener API: {str(e)}")
+            raise
 
     except Exception as e:
         logger.error(f"Error getting top losers: {str(e)}")

@@ -240,12 +240,51 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Get single stock by symbol
   app.get("/api/stocks/:symbol", async (req, res) => {
     try {
-      const stock = await storage.getStockBySymbol(req.params.symbol);
+      const symbol = req.params.symbol.toUpperCase();
+      
+      // Try to get real-time data from YFinance first
+      try {
+        const result = await getDeepseekInfo(symbol) as { 
+          success: boolean; 
+          data?: { 
+            symbol: string;
+            name: string;
+            currentPrice: number;
+            previousClose: number;
+            priceChange: number;
+            priceChangePercent: number;
+            industry: string;
+            sector: string;
+            marketCap: number;
+            news: any[];
+            [key: string]: any;
+          };
+          message?: string;
+        };
+        
+        if (result && result.success && result.data) {
+          return res.status(200).json({ 
+            success: true, 
+            data: result.data,
+            source: "yfinance"
+          });
+        }
+      } catch (yfinanceError) {
+        console.error("Error getting YFinance data:", yfinanceError);
+      }
+      
+      // Fallback to database if YFinance fails
+      const stock = await storage.getStockBySymbol(symbol);
       if (!stock) {
         return res.status(404).json({ success: false, message: "Stock not found" });
       }
-      return res.status(200).json({ success: true, data: stock });
+      return res.status(200).json({ 
+        success: true, 
+        data: stock,
+        source: "database"
+      });
     } catch (error) {
+      console.error("Error fetching stock details:", error);
       return res.status(500).json({ success: false, message: "Failed to fetch stock" });
     }
   });
