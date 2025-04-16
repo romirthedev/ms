@@ -1,4 +1,15 @@
-import { InsertStockAnalysis, NewsItem, Stock } from '@shared/schema';
+import { InsertStockAnalysis, NewsItem, Stock as BaseStock } from '@shared/schema';
+
+// Extend the Stock type to include analysis
+interface Stock extends BaseStock {
+  analysis?: {
+    rating: number;
+    summary: string;
+    confidence: number;
+    movement: 'up' | 'down' | 'stable';
+    shortTerm: string;
+  };
+}
 import { storage } from '../storage';
 
 // Interface for analysis results
@@ -311,8 +322,59 @@ async function updateAllStockAnalyses(): Promise<void> {
   }
 }
 
+// Get top picks based on comprehensive analysis
+async function getTopPicks(limit: number = 5): Promise<Stock[]> {
+  try {
+    const analyses = await storage.getTopRatedStockAnalyses(limit * 2);
+    const topPicks: Stock[] = [];
+
+    // Filter and sort for best picks with more lenient criteria
+    for (const analysis of analyses) {
+      const stock = await storage.getStockBySymbol(analysis.stockSymbol);
+      if (stock && 
+          analysis.potentialRating >= 6) { // Lowered from 7
+        topPicks.push({
+          ...stock,
+          analysis: {
+            rating: analysis.potentialRating,
+            summary: analysis.summaryText || "Analysis in progress",
+            confidence: analysis.confidenceScore || 0.5,
+            movement: (analysis.predictedMovementDirection as 'up' | 'down' | 'stable') || "stable",
+            shortTerm: "Monitoring market conditions"
+          }
+        });
+      }
+      
+      if (topPicks.length >= limit) break;
+    }
+
+    // If we still don't have enough picks, add some default ones
+    if (topPicks.length === 0) {
+      const defaultStocks = await storage.getStocks();
+      for (const stock of defaultStocks.slice(0, limit)) {
+        topPicks.push({
+          ...stock,
+          analysis: {
+            rating: 5,
+            summary: "Default analysis pending",
+            confidence: 0.5,
+            movement: "stable",
+            shortTerm: "Awaiting market data"
+          }
+        });
+      }
+    }
+
+    return topPicks;
+  } catch (error) {
+    console.error('Error getting top picks:', error);
+    return [];
+  }
+}
+
 export const localAnalysisService = {
   analyzeStockNews,
   updateStockAnalysis,
-  updateAllStockAnalyses
+  updateAllStockAnalyses,
+  getTopPicks 
 };

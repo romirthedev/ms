@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 
-import yfinance as yf
-import pandas as pd
+import yfinance as yf # type: ignore
+import pandas as pd # type: ignore
 import json
 import os
 import traceback
