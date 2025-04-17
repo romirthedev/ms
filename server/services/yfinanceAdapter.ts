@@ -32,7 +32,7 @@ export async function getTopLosers(industry: string | null = null, limit: number
     
     console.log('Running Python with args:', args);
     
-    const pythonProcess = spawn('python3', args);
+    const pythonProcess = spawn('python', args);
     
     let dataString = '';
     
@@ -75,7 +75,7 @@ export async function getDeepseekInfo(symbol: string) {
     
     console.log('Running Python with args:', args);
     
-    const pythonProcess = spawn('python3', args);
+    const pythonProcess = spawn('python', args);
     
     let dataString = '';
     

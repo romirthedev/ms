@@ -125,6 +125,7 @@ export default function BiggestLosersPage() {
   const [loadingDeepSeek, setLoadingDeepSeek] = useState(false);
   const [aiAnalysisResult, setAiAnalysisResult] = useState<AIAnalysisResult | null>(null);
   const [loadingAiAnalysis, setLoadingAiAnalysis] = useState(false);
+  const [allIndustries, setAllIndustries] = useState<string[]>([]);
 
   // Fetch biggest losers data
   const { data, isLoading, error } = useQuery<{ 
@@ -134,6 +135,32 @@ export default function BiggestLosersPage() {
     source: string;
   }>({
     queryKey: ['/api/stocks/biggest-losers', selectedIndustry],
+    queryFn: async () => {
+      // First, fetch all industries if we don't have them yet
+      if (allIndustries.length === 0) {
+        try {
+          const allIndustriesResponse = await fetch('/api/stocks/biggest-losers');
+          const allIndustriesData = await allIndustriesResponse.json();
+          if (allIndustriesData.success && allIndustriesData.industries) {
+            setAllIndustries(allIndustriesData.industries);
+          }
+        } catch (error) {
+          console.error('Error fetching all industries:', error);
+        }
+      }
+
+      // Then fetch filtered data if needed
+      const url = selectedIndustry === 'all' 
+        ? '/api/stocks/biggest-losers' 
+        : `/api/stocks/biggest-losers?industry=${encodeURIComponent(selectedIndustry)}`;
+      
+      console.log('Fetching with URL:', url);
+      const response = await fetch(url);
+      if (!response.ok) {
+        throw new Error('Failed to fetch data');
+      }
+      return response.json();
+    },
     staleTime: 60000, // 1 minute
   });
   
@@ -204,17 +231,30 @@ export default function BiggestLosersPage() {
   const isYFinanceData = data?.source === 'yfinance';
   
   // Filter losers by search term
-  const filteredLosers = data?.data.filter(stock => 
-    stock.symbol.toLowerCase().includes(searchTerm.toLowerCase()) || 
-    stock.companyName.toLowerCase().includes(searchTerm.toLowerCase())
-  ) || [];
+  const filteredLosers = React.useMemo(() => {
+    console.log('Filtering losers by search term:', searchTerm);
+    if (!data?.data) return [];
+    
+    if (!searchTerm.trim()) return data.data;
+    
+    const term = searchTerm.toLowerCase().trim();
+    return data.data.filter(stock => 
+      stock.symbol.toLowerCase().includes(term) || 
+      stock.companyName.toLowerCase().includes(term)
+    );
+  }, [data?.data, searchTerm]);
 
   return (
     <div className="container mx-auto py-6 space-y-8">
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
         <div>
           <h1 className="text-3xl font-bold">Biggest Daily Losers</h1>
-          <p className="text-muted-foreground">Stocks with the largest daily percentage losses</p>
+          <p className="text-muted-foreground">
+            Stocks with the largest daily percentage losses
+            {selectedIndustry !== 'all' && ` - Filtered by ${selectedIndustry}`}
+            {searchTerm && ` - Search: "${searchTerm}"`}
+            {filteredLosers.length > 0 && ` (${filteredLosers.length} results)`}
+          </p>
         </div>
 
         {/* Filter controls */}
@@ -237,7 +277,10 @@ export default function BiggestLosersPage() {
             <Label htmlFor="industry-filter" className="sr-only">Filter by Industry</Label>
             <Select 
               value={selectedIndustry} 
-              onValueChange={setSelectedIndustry}
+              onValueChange={(value) => {
+                console.log('Selected industry:', value);
+                setSelectedIndustry(value);
+              }}
             >
               <SelectTrigger id="industry-filter">
                 <SelectValue placeholder="Filter by Industry" />
@@ -245,7 +288,7 @@ export default function BiggestLosersPage() {
               <SelectContent>
                 <SelectGroup>
                   <SelectItem value="all">All Industries</SelectItem>
-                  {data?.industries.map(industry => (
+                  {(allIndustries.length > 0 ? allIndustries : data?.industries || []).map(industry => (
                     <SelectItem key={industry} value={industry}>
                       {industry}
                     </SelectItem>
