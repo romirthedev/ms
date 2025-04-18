@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { useAuth } from '@/hooks/use-auth';
 import { Link } from 'wouter';
-import { Stock, StockAnalysis, NewsItem } from '@shared/schema';
+import { Stock, StockAnalysis as BaseStockAnalysis, NewsItem } from '@shared/schema';
 import { 
   Card, 
   CardHeader, 
@@ -44,13 +44,59 @@ import {
   Eye,
   Star,
   RefreshCw,
-  ExternalLink
+  ExternalLink,
+  TrendingDown,
+  Brain,
+  AlertTriangle,
+  ThumbsUp,
+  ThumbsDown,
+  Target
 } from 'lucide-react';
 import { apiRequest, queryClient } from '@/lib/queryClient';
 import { useToast } from '@/hooks/use-toast';
 import { Badge } from '@/components/ui/badge';
 import { format } from 'date-fns';
 import { motion, AnimatePresence } from 'framer-motion';
+import { Progress } from '@/components/ui/progress';
+
+// Extended StockAnalysis interface to include additional properties needed
+interface StockAnalysis extends BaseStockAnalysis {
+  currentPrice?: number;
+  priceChangePercent?: number;
+  recommendation?: string;
+  industry?: string;
+  sector?: string;
+}
+
+// Interface for AI Analysis Result
+interface AIAnalysisResult {
+  potentialRating: number;
+  summaryText: string;
+  predictedMovementDirection: 'up' | 'down' | 'stable';
+  breakingNewsCount?: number | null;
+  positiveNewsCount?: number | null;
+  negativeNewsCount?: number | null;
+  neutralNewsCount?: number | null;
+  priceTargets?: {
+    low: number | null;
+    high: number | null;
+  };
+  evidencePoints?: string[] | null;
+  shortTermOutlook?: string | null;
+  longTermOutlook?: string | null;
+  stock?: {
+    symbol: string;
+    companyName: string;
+    currentPrice: number;
+    priceChange: number;
+    priceChangePercent: number;
+  };
+  newsCount?: number;
+  newsArticles?: any[];
+  source?: string;
+  analysisMethod?: string;
+  analysisDate?: string;
+}
 
 // Component to display news sources for a stock
 const StockNewsSources: React.FC<{ stockSymbol: string }> = ({ stockSymbol }) => {
@@ -91,6 +137,184 @@ const StockNewsSources: React.FC<{ stockSymbol: string }> = ({ stockSymbol }) =>
         </a>
       ))}
     </div>
+  );
+};
+
+// Skeleton component for loading state
+const Skeleton = ({ className }: { className?: string }) => {
+  return <div className={`animate-pulse bg-muted rounded ${className}`}></div>;
+};
+
+// Component for displaying AI News Analysis
+const AINewsAnalysis: React.FC<{ stockSymbol: string }> = ({ stockSymbol }) => {
+  const { data, isLoading, error } = useQuery<{ success: boolean; data: AIAnalysisResult }>({
+    queryKey: [`/api/analyses/ai/${stockSymbol}`],
+    enabled: !!stockSymbol,
+  });
+
+  if (isLoading) return (
+    <Card className="mt-4">
+      <CardHeader>
+        <CardTitle className="flex items-center gap-2">
+          <Brain size={20} />
+          <span>AI News Analysis</span>
+        </CardTitle>
+        <CardDescription>Loading analysis...</CardDescription>
+      </CardHeader>
+      <CardContent>
+        <div className="space-y-4">
+          <Skeleton className="h-4 w-[250px]" />
+          <Skeleton className="h-4 w-[400px]" />
+          <Skeleton className="h-4 w-[350px]" />
+          <Skeleton className="h-4 w-[300px]" />
+        </div>
+      </CardContent>
+    </Card>
+  );
+
+  if (error || !data?.success || !data?.data) return (
+    <Card className="mt-4">
+      <CardHeader>
+        <CardTitle className="flex items-center gap-2 text-destructive">
+          <AlertTriangle size={20} />
+          <span>Analysis Unavailable</span>
+        </CardTitle>
+        <CardDescription>
+          Unable to load AI analysis for this stock.
+        </CardDescription>
+      </CardHeader>
+      <CardContent>
+        <p className="text-sm text-muted-foreground">
+          The AI analysis service is currently unavailable. Please try again later.
+        </p>
+      </CardContent>
+    </Card>
+  );
+
+  const analysis = data.data;
+  
+  // Helper function to determine color based on direction
+  const getDirectionColor = (direction: string) => {
+    if (direction === 'up') return 'text-green-500';
+    if (direction === 'down') return 'text-red-500';
+    return 'text-amber-500'; // stable
+  };
+
+  // Helper function to determine icon based on direction
+  const getDirectionIcon = (direction: string) => {
+    if (direction === 'up') return <TrendingUp className="text-green-500" />;
+    if (direction === 'down') return <TrendingDown className="text-red-500" />;
+    return <Target className="text-amber-500" />; // stable
+  };
+
+  return (
+    <Card className="mt-4">
+      <CardHeader>
+        <CardTitle className="flex items-center gap-2">
+          <Brain size={20} />
+          <span>AI News Analysis</span>
+        </CardTitle>
+        <CardDescription>
+          Analysis based on {analysis.newsCount || 0} news articles using {analysis.analysisMethod || 'AI'}
+        </CardDescription>
+      </CardHeader>
+      <CardContent>
+        <div className="space-y-6">
+          {/* Rating and prediction */}
+          <div className="flex flex-col md:flex-row md:items-center gap-4 justify-between">
+            <div className="space-y-2">
+              <p className="text-lg font-semibold">{analysis.summaryText}</p>
+              <div className="flex items-center gap-2">
+                <span className="text-sm font-medium">Predicted Movement:</span>
+                <span className={`flex items-center gap-1 ${getDirectionColor(analysis.predictedMovementDirection)}`}>
+                  {getDirectionIcon(analysis.predictedMovementDirection)}
+                  <span className="capitalize">{analysis.predictedMovementDirection}</span>
+                </span>
+              </div>
+            </div>
+            <div className="flex flex-col items-center">
+              <span className="text-sm font-medium">Growth Potential</span>
+              <div className="flex items-center gap-2 mt-1">
+                <Progress value={analysis.potentialRating * 10} className="w-36 h-2" />
+                <span className="text-lg font-bold">{analysis.potentialRating}/10</span>
+              </div>
+            </div>
+          </div>
+
+          {/* Outlook sections */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="space-y-2">
+              <h4 className="text-sm font-semibold">Short-Term Outlook</h4>
+              <p className="text-sm">{analysis.shortTermOutlook || "No short-term outlook available"}</p>
+            </div>
+            <div className="space-y-2">
+              <h4 className="text-sm font-semibold">Long-Term Outlook</h4>
+              <p className="text-sm">{analysis.longTermOutlook || "No long-term outlook available"}</p>
+            </div>
+          </div>
+
+          {/* Evidence points */}
+          {analysis.evidencePoints && analysis.evidencePoints.length > 0 && (
+            <div className="space-y-2">
+              <h4 className="text-sm font-semibold">Key Evidence</h4>
+              <ul className="list-disc pl-5 space-y-1">
+                {analysis.evidencePoints.map((point, index) => (
+                  <li key={index} className="text-sm">{point}</li>
+                ))}
+              </ul>
+            </div>
+          )}
+
+          {/* News sentiment breakdown */}
+          {(analysis.positiveNewsCount !== null || analysis.negativeNewsCount !== null) && (
+            <div className="space-y-2">
+              <h4 className="text-sm font-semibold">News Sentiment</h4>
+              <div className="grid grid-cols-3 gap-2">
+                <div className="flex flex-col items-center p-2 border rounded-md">
+                  <ThumbsUp className="text-green-500 mb-1" size={16} />
+                  <span className="text-xs">Positive</span>
+                  <span className="font-bold">{analysis.positiveNewsCount || 0}</span>
+                </div>
+                <div className="flex flex-col items-center p-2 border rounded-md">
+                  <ThumbsDown className="text-red-500 mb-1" size={16} />
+                  <span className="text-xs">Negative</span>
+                  <span className="font-bold">{analysis.negativeNewsCount || 0}</span>
+                </div>
+                <div className="flex flex-col items-center p-2 border rounded-md">
+                  <AlertTriangle className="text-amber-500 mb-1" size={16} />
+                  <span className="text-xs">Neutral</span>
+                  <span className="font-bold">{analysis.neutralNewsCount || 0}</span>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Price targets if available */}
+          {analysis.priceTargets && (analysis.priceTargets.low !== null || analysis.priceTargets.high !== null) && (
+            <div className="space-y-2">
+              <h4 className="text-sm font-semibold">Price Targets</h4>
+              <div className="flex items-center gap-4">
+                {analysis.priceTargets.low !== null && (
+                  <div className="flex items-center gap-1">
+                    <span className="text-xs">Low:</span>
+                    <span className="font-bold">${analysis.priceTargets.low.toFixed(2)}</span>
+                  </div>
+                )}
+                {analysis.priceTargets.high !== null && (
+                  <div className="flex items-center gap-1">
+                    <span className="text-xs">High:</span>
+                    <span className="font-bold">${analysis.priceTargets.high.toFixed(2)}</span>
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+        </div>
+      </CardContent>
+      <CardFooter className="text-xs text-muted-foreground">
+        Analysis generated {analysis.analysisDate ? format(new Date(analysis.analysisDate), 'PPp') : 'recently'}
+      </CardFooter>
+    </Card>
   );
 };
 
@@ -374,175 +598,127 @@ const DashboardPage = () => {
   };
   
   const renderStockDetail = () => {
-    if (!selectedStock || !stockAnalysis || !stockAnalysis.data) {
-      return <div className="text-center py-8">Select a stock to view details</div>;
-    }
-    
-    const analysis = stockAnalysis.data;
-    const evidencePoints = analysis.evidencePoints || [];
+    if (!selectedStock) return null;
     
     return (
-      <div className="grid md:grid-cols-3 gap-4">
-        <div className="md:col-span-2">
-          <Card>
-            <CardHeader>
-              <div className="flex justify-between items-center">
-                <div>
-                  <CardTitle className="flex items-center">
-                    {analysis.stockSymbol} - {analysis.companyName}
-                    {analysis.isBreakthrough && (
-                      <Badge className="ml-2 bg-purple-100 text-purple-800">Breakthrough</Badge>
-                    )}
-                  </CardTitle>
-                  <CardDescription>
-                    Analysis from {formatDate(analysis.analysisDate.toString())}
-                  </CardDescription>
-                </div>
-                <div className="flex items-center space-x-2">
-                  {renderPotentialRating(analysis.potentialRating)}
-                  <span className="text-sm text-gray-500">
-                    Potential ({analysis.potentialRating}/10)
-                  </span>
-                </div>
-              </div>
-            </CardHeader>
-            <CardContent>
-              <div className="space-y-4">
-                <div>
-                  <h3 className="text-lg font-medium">Summary</h3>
-                  <p className="text-gray-700 mt-1">{analysis.summaryText}</p>
-                </div>
-                
-                {evidencePoints.length > 0 && (
-                  <div>
-                    <h3 className="text-lg font-medium">Key Evidence</h3>
-                    <ul className="list-disc pl-5 mt-1 space-y-1">
-                      {evidencePoints.map((point, index) => (
-                        <li key={index} className="text-gray-700">{point}</li>
-                      ))}
-                    </ul>
-                  </div>
-                )}
-                
-                <div className="grid grid-cols-2 gap-4">
-                  <div className="bg-gray-50 p-3 rounded-lg">
-                    <p className="text-sm text-gray-500">Prediction</p>
-                    <div className={`text-xl font-semibold flex items-center ${getAnalysisColor(analysis.predictedMovementDirection)}`}>
-                      {analysis.predictedMovementDirection === 'up' && <TrendingUp className="mr-1 h-5 w-5" />}
-                      {analysis.predictedMovementDirection === 'down' && <ArrowUpRight className="mr-1 h-5 w-5 rotate-180" />}
-                      {analysis.predictedMovementPercent ? `${analysis.predictedMovementPercent.toFixed(2)}%` : 'N/A'}
-                    </div>
-                  </div>
+      <AnimatePresence>
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          exit={{ opacity: 0, y: -20 }}
+          transition={{ duration: 0.3 }}
+          className="mt-4"
+        >
+          <div className="grid grid-cols-1 gap-6">
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center justify-between">
+                  <span>Stock Details</span>
+                  <Button 
+                    variant="ghost" 
+                    size="sm" 
+                    onClick={() => setSelectedStock(null)}
+                  >
+                    Close
+                  </Button>
+                </CardTitle>
+                <CardDescription>
+                  Latest information and analysis
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                <Tabs defaultValue="overview">
+                  <TabsList className="mb-4">
+                    <TabsTrigger value="overview">Overview</TabsTrigger>
+                    <TabsTrigger value="news">News</TabsTrigger>
+                    <TabsTrigger value="analysis">Analysis</TabsTrigger>
+                  </TabsList>
                   
-                  <div className="bg-gray-50 p-3 rounded-lg">
-                    <p className="text-sm text-gray-500">Confidence</p>
-                    <div className="text-xl font-semibold">
-                      {Math.round(analysis.confidenceScore * 100)}%
-                    </div>
-                  </div>
-                </div>
-                
-                <div className="grid grid-cols-3 gap-4">
-                  <div className="bg-gray-50 p-3 rounded-lg text-center">
-                    <p className="text-sm text-gray-500">Breaking News</p>
-                    <div className="text-lg font-semibold">{analysis.breakingNewsCount || 0}</div>
-                  </div>
-                  
-                  <div className="bg-gray-50 p-3 rounded-lg text-center">
-                    <p className="text-sm text-gray-500">Positive News</p>
-                    <div className="text-lg font-semibold text-green-600">{analysis.positiveNewsCount || 0}</div>
-                  </div>
-                  
-                  <div className="bg-gray-50 p-3 rounded-lg text-center">
-                    <p className="text-sm text-gray-500">Negative News</p>
-                    <div className="text-lg font-semibold text-red-600">{analysis.negativeNewsCount || 0}</div>
-                  </div>
-                </div>
-              </div>
-            </CardContent>
-            <CardFooter className="flex justify-end">
-              {isInWatchlist(analysis.stockId) ? (
-                <Button 
-                  variant="outline"
-                  onClick={() => removeFromWatchlist(analysis.stockId)}
-                >
-                  <Star className="h-4 w-4 mr-2 fill-yellow-500 text-yellow-500" />
-                  Remove from Watchlist
-                </Button>
-              ) : (
-                <Button 
-                  onClick={() => addToWatchlist(analysis.stockId)}
-                >
-                  <Plus className="h-4 w-4 mr-2" />
-                  Add to Watchlist
-                </Button>
-              )}
-            </CardFooter>
-          </Card>
-        </div>
-        
-        <div>
-          <Card>
-            <CardHeader>
-              <CardTitle className="text-lg">Related News</CardTitle>
-              <CardDescription>
-                Recent news articles about {analysis.stockSymbol}
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              {loadingNews ? (
-                <div className="text-center py-4">Loading news...</div>
-              ) : stockNews && stockNews.data && stockNews.data.length > 0 ? (
-                <div className="space-y-4">
-                  {stockNews.data.map((news) => (
-                    <div key={news.id} className="border-b pb-4 last:border-0">
-                      <a 
-                        href={news.url} 
-                        target="_blank" 
-                        rel="noopener noreferrer"
-                        className="font-medium hover:text-primary transition-colors"
-                      >
-                        <h4 className="flex items-center">
-                          {news.title}
-                          <ExternalLink className="ml-1 h-3 w-3 opacity-50" />
-                        </h4>
-                      </a>
-                      <p className="text-sm text-gray-600 line-clamp-2 mt-1">{news.content}</p>
-                      <div className="flex justify-between items-center mt-2">
-                        <div className="flex items-center">
-                          <Badge variant="outline" className="mr-2">
-                            {news.source}
-                          </Badge>
-                          <span className="text-xs text-gray-500">
-                            {formatDate(news.publishedAt.toString())}
-                          </span>
+                  <TabsContent value="overview">
+                    {loadingAnalysis ? (
+                      <div className="animate-pulse space-y-4">
+                        <div className="h-4 bg-gray-200 rounded w-3/4"></div>
+                        <div className="h-4 bg-gray-200 rounded w-1/2"></div>
+                        <div className="h-4 bg-gray-200 rounded w-5/6"></div>
+                      </div>
+                    ) : stockAnalysis?.data ? (
+                      <div className="space-y-4">
+                        <div className="grid grid-cols-2 gap-4">
+                          <div>
+                            <h3 className="text-lg font-bold">{stockAnalysis.data.stockSymbol}</h3>
+                            <p className="text-sm text-gray-500">{stockAnalysis.data.companyName}</p>
+                          </div>
+                          <div className="text-right">
+                            <div className="text-xl font-bold">${stockAnalysis.data.currentPrice?.toFixed(2) || '0.00'}</div>
+                            <div className={`text-sm ${(stockAnalysis.data.priceChangePercent || 0) >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                              {(stockAnalysis.data.priceChangePercent || 0) >= 0 ? '+' : ''}
+                              {stockAnalysis.data.priceChangePercent?.toFixed(2) || '0.00'}%
+                            </div>
+                          </div>
                         </div>
-                        <Badge className={`${news.sentiment && news.sentiment > 0.6 ? 'bg-green-100 text-green-800' : news.sentiment && news.sentiment < 0.4 ? 'bg-red-100 text-red-800' : 'bg-gray-100 text-gray-800'}`}>
-                          {news.sentiment ? `${Math.round(news.sentiment * 100)}%` : 'N/A'}
-                        </Badge>
+                        
+                        <div className="space-y-2">
+                          <h4 className="font-semibold">Potential Rating</h4>
+                          <div className="flex items-center">
+                            <div className="w-full bg-gray-200 rounded-full h-2">
+                              <div 
+                                className={`h-2 rounded-full ${getAnalysisColor(stockAnalysis.data.recommendation || '')}`} 
+                                style={{ width: `${stockAnalysis.data.potentialRating * 10}%` }}
+                              ></div>
+                            </div>
+                            <span className="ml-2 font-semibold">{stockAnalysis.data.potentialRating.toFixed(1)}</span>
+                          </div>
+                        </div>
+                        
+                        <div>
+                          <h4 className="font-semibold">Summary</h4>
+                          <p className="text-sm mt-1">{stockAnalysis.data.summaryText}</p>
+                        </div>
+                        
+                        <div className="grid grid-cols-2 gap-4 text-sm">
+                          <div>
+                            <span className="font-semibold block">Industry</span>
+                            {stockAnalysis.data.industry || 'Not available'}
+                          </div>
+                          <div>
+                            <span className="font-semibold block">Sector</span>
+                            {stockAnalysis.data.sector || 'Not available'}
+                          </div>
+                        </div>
+                        
+                        <div>
+                          <h4 className="font-semibold">Recommendation</h4>
+                          <div className={`inline-flex items-center px-2 py-1 mt-1 rounded text-xs ${getConfidenceColor(stockAnalysis.data.confidenceScore)}`}>
+                            {stockAnalysis.data.recommendation || 'Neutral'}
+                          </div>
+                        </div>
                       </div>
-                      <div className="mt-2 text-xs text-gray-500 flex items-center">
-                        <Newspaper className="h-3 w-3 mr-1" />
-                        <span>Source: </span>
-                        <a 
-                          href={news.url} 
-                          target="_blank" 
-                          rel="noopener noreferrer"
-                          className="text-primary hover:underline ml-1"
-                        >
-                          {new URL(news.url).hostname.replace('www.', '')}
-                        </a>
+                    ) : (
+                      <div className="text-center py-6 text-gray-500">
+                        No analysis data available
                       </div>
+                    )}
+                  </TabsContent>
+                  
+                  <TabsContent value="news">
+                    <div className="space-y-4">
+                      <h3 className="font-semibold">Recent News</h3>
+                      <StockNewsSources stockSymbol={selectedStock} />
                     </div>
-                  ))}
-                </div>
-              ) : (
-                <div className="text-center py-4 text-gray-500">No news found</div>
-              )}
-            </CardContent>
-          </Card>
-        </div>
-      </div>
+                  </TabsContent>
+                  
+                  <TabsContent value="analysis">
+                    <div className="space-y-4">
+                      <h3 className="font-semibold">Market Analysis</h3>
+                      <AINewsAnalysis stockSymbol={selectedStock} />
+                    </div>
+                  </TabsContent>
+                </Tabs>
+              </CardContent>
+            </Card>
+          </div>
+        </motion.div>
+      </AnimatePresence>
     );
   };
   
