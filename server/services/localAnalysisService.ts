@@ -302,6 +302,8 @@ async function updateStockAnalysis(stock: Stock): Promise<void> {
   }
 }
 
+// Minor update to trigger Git change detection
+
 // Update analyses for all stocks
 async function updateAllStockAnalyses(): Promise<void> {
   try {
