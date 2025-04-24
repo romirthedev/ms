@@ -110,6 +110,8 @@ export const stockAnalyses = pgTable("stock_analyses", {
   negativeNewsCount: integer("negative_news_count"),
   summaryText: text("summary_text").notNull(),
   evidencePoints: text("evidence_points").array(),
+  shortTermOutlook: text("short_term_outlook"),
+  longTermOutlook: text("long_term_outlook"),
   relatedNewsIds: integer("related_news_ids").array(),
   predictedMovementDirection: text("predicted_movement_direction").notNull(), // "up", "down", "stable"
   predictedMovementPercent: real("predicted_movement_percent"),
