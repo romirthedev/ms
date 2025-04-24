@@ -81,6 +81,15 @@ async function performDataUpdate() {
   }
 }
 
+// Helper function to convert rating to recommendation
+function getRatingRecommendation(rating: number): string {
+  if (rating >= 9) return "Strong Buy";
+  if (rating >= 7) return "Buy";
+  if (rating >= 5) return "Hold";
+  if (rating >= 3) return "Sell";
+  return "Strong Sell";
+}
+
 export async function registerRoutes(app: Express): Promise<Server> {
   // Set up authentication routes
   setupAuth(app);
@@ -340,35 +349,39 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const limit = req.query.limit ? parseInt(req.query.limit as string) : 10;
       
-      // For improved response, force refresh of analyses
-      // Get all stocks to ensure top picks are properly calculated
-      const stocks = await storage.getStocks();
+      console.log(`Fetching top ${limit} stock picks with real AI analysis...`);
       
-      // Update analyses for any newly added stocks that might not be in the analyses table yet
-      for (const stock of stocks) {
-        const existingAnalysis = await storage.getStockAnalysisByStockId(stock.id);
-        if (!existingAnalysis) {
-          // Create a sample analysis for this stock
-          const now = new Date();
-          await storage.createStockAnalysis({
-            stockId: stock.id,
-            stockSymbol: stock.symbol,
-            companyName: stock.companyName,
-            potentialRating: Math.floor(Math.random() * 6) + 5, // 5-10 rating
-            summaryText: `Analysis of ${stock.companyName} based on recent developments and market trends.`,
-            predictedMovementDirection: Math.random() > 0.3 ? 'up' : 'down',
-            predictedMovementPercent: parseFloat((Math.random() * 10 + 2).toFixed(1)),
-            confidenceScore: parseFloat((Math.random() * 0.2 + 0.75).toFixed(2)),
-            breakingNewsCount: Math.floor(Math.random() * 5),
-            positiveNewsCount: Math.floor(Math.random() * 8),
-            negativeNewsCount: Math.floor(Math.random() * 3),
-            isBreakthrough: Math.random() > 0.7,
-            analysisDate: now
-          });
-        }
-      }
+      // Get the top picks with highest potential rating
+      const topAnalyses = await storage.getTopRatedStockAnalyses(limit);
+      console.log(`Found ${topAnalyses.length} top-rated stock analyses`);
       
-      const analyses = await storage.getTopRatedStockAnalyses(limit);
+      // Transform the data to include more stock information
+      const analyses = await Promise.all(topAnalyses.map(async (analysis) => {
+        // Get the corresponding stock info
+        const stock = await storage.getStockBySymbol(analysis.stockSymbol);
+        
+        // Fetch the latest news for this stock for evidence sources
+        const latestNews = await storage.getNewsItemsByStockSymbol(analysis.stockSymbol, 3);
+        
+        return {
+          ...analysis,
+          currentPrice: stock?.currentPrice,
+          previousClose: stock?.previousClose,
+          priceChange: stock?.priceChange,
+          priceChangePercent: stock?.priceChangePercent,
+          sector: stock?.sector,
+          industry: stock?.industry,
+          relatedNews: latestNews.map(news => ({
+            id: news.id,
+            title: news.title,
+            source: news.source,
+            publishedAt: news.publishedAt
+          })),
+          recommendation: getRatingRecommendation(analysis.potentialRating)
+        };
+      }));
+      
+      console.log(`Returning ${analyses.length} top picks with real AI analysis`);
       return res.status(200).json({ success: true, data: analyses });
     } catch (error) {
       console.error("Error fetching top analyses:", error);

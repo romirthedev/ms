@@ -52,82 +52,31 @@ interface StockAnalysisResult {
  */
 async function analyzeStockNews(stock: ExtendedStock, newsText: string): Promise<StockAnalysisResult> {
   console.log(`Analyzing news for ${stock.symbol} with DeepSeek AI...`);
-  
-  // Check environment variables at runtime, not module load time
+
   const apiKey = process.env.XAI_API_KEY;
-  console.log('XAI_API_KEY status:', apiKey ? 'Found key (not showing value)' : 'Key not found');
-  
   if (!apiKey) {
     throw new Error('OpenRouter API key is not configured. Please set XAI_API_KEY in environment variables.');
   }
-  
-  // Create system prompt for the AI
-  const systemPrompt = `
-You are StockSense AI, an expert financial analysis AI. 
-Analyze the provided news articles about ${stock.symbol} (${stock.companyName}) to determine the stock's potential.
-Based ONLY on the news articles provided and current stock information, provide:
 
-1. A numerical rating from 1-10 indicating the stock's growth potential (1 = very low, 10 = very high)
-2. A concise summary (1-2 sentences)
-3. A predicted price movement direction (up, down, or stable)
-4. Evidence points from the news articles supporting your analysis
-5. Short and long-term outlook based on news sentiment
-
-Respond with valid JSON only, in this exact format:
-{
-  "potentialRating": number,
-  "summaryText": "concise summary",
-  "predictedMovementDirection": "up|down|stable",
-  "breakingNewsCount": number or null,
-  "positiveNewsCount": number,
-  "negativeNewsCount": number,
-  "neutralNewsCount": number,
-  "priceTargets": {
-    "low": number or null,
-    "high": number or null
-  },
-  "evidencePoints": ["point 1", "point 2", "point 3"],
-  "shortTermOutlook": "short term analysis",
-  "longTermOutlook": "long term analysis"
-}
-`;
-
-  // Add current stock price information to the user message
-  const userMessage = `
-Current stock information for ${stock.symbol} (${stock.companyName}):
-Current Price: $${stock.currentPrice || 'Unknown'}
-Price Change: ${stock.priceChange || 0} (${stock.priceChangePercent || 0}%)
-Industry: ${stock.industry || 'Unknown'}
-Sector: ${stock.sector || 'Unknown'}
-52 Week Range: $${stock.weekLow || 'Unknown'} - $${stock.weekHigh || 'Unknown'}
-
-${newsText}
-
-Based on the news articles and current stock data above, provide your analysis in the exact JSON format specified in your instructions.
-`;
+  const systemPrompt = `You are StockSense AI, an expert financial analysis AI.`;
+  const userMessage = `Analyze the provided news articles about ${stock.symbol} (${stock.companyName}) and determine the stock's potential rating (1-10), movement direction (up/down/stable), summary, price targets, evidence points, short-term outlook, and long-term outlook. Respond with a JSON object.\n\nNews articles:\n${newsText}`;
 
   try {
     const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
       method: "POST",
       headers: {
         "Authorization": `Bearer ${apiKey}`,
-        "HTTP-Referer": "https://stocksense.ai",
-        "X-Title": "StockSense AI",
+        "HTTP-Referer": "https://marketsentinel.ai",
+        "X-Title": "Market Sentinel AI",
         "Content-Type": "application/json"
       },
       body: JSON.stringify({
-        "model": DEEPSEEK_MODEL,
-        "messages": [
-          {
-            "role": "system",
-            "content": systemPrompt
-          },
-          {
-            "role": "user",
-            "content": userMessage
-          }
+        model: DEEPSEEK_MODEL,
+        messages: [
+          { role: "system", content: systemPrompt },
+          { role: "user", content: userMessage }
         ],
-        "response_format": { "type": "json_object" }
+        response_format: { type: "json_object" }
       })
     });
 
@@ -137,64 +86,69 @@ Based on the news articles and current stock data above, provide your analysis i
       throw new Error(`DeepSeek API error: ${response.status} ${response.statusText}`);
     }
 
-    // Handle the response and extract the content
-    const rawData: any = await response.json();
+    const rawData = await response.json() as OpenRouterResponse;
     if (!rawData || !rawData.choices || !rawData.choices[0] || !rawData.choices[0].message) {
+      console.error("Unexpected API response format:", rawData);
       throw new Error("Unexpected API response format from OpenRouter");
     }
-    
+
     const aiResponse = rawData.choices[0].message.content;
-    
     console.log(`DeepSeek analysis received for ${stock.symbol}`);
-    
-    // Parse the JSON response
+
     try {
-      // Clean up the response if it contains markdown code blocks
+      // Parse the JSON response
       let cleanResponse = aiResponse;
       if (aiResponse.includes('```json')) {
-        // Extract JSON from markdown code block
         const jsonStart = aiResponse.indexOf('{');
         const jsonEnd = aiResponse.lastIndexOf('}') + 1;
-        
         if (jsonStart >= 0 && jsonEnd > jsonStart) {
           cleanResponse = aiResponse.substring(jsonStart, jsonEnd);
         }
       }
-      
-      console.log(`Processing cleaned response for ${stock.symbol}`);
+
       const analysisResult: StockAnalysisResult = JSON.parse(cleanResponse);
-      
-      // Ensure we have valid values for required fields
+
+      // Ensure required fields are present
       analysisResult.potentialRating = Math.max(1, Math.min(10, analysisResult.potentialRating || 5));
       analysisResult.summaryText = analysisResult.summaryText || `Analysis of ${stock.symbol} based on recent news.`;
       analysisResult.predictedMovementDirection = analysisResult.predictedMovementDirection || 'stable';
-      
+
+      // Generate fallback price targets if missing
+      if (!analysisResult.priceTargets || analysisResult.priceTargets.low === null || analysisResult.priceTargets.high === null) {
+        console.log(`Generating fallback price targets for ${stock.symbol}`);
+        const currentPrice = stock.currentPrice || 0;
+        analysisResult.priceTargets = {
+          low: parseFloat((currentPrice * 0.97).toFixed(2)),
+          high: parseFloat((currentPrice * 1.03).toFixed(2))
+        };
+      }
+
       return analysisResult;
-    } catch (error) {
-      console.error("Error parsing DeepSeek response:", error);
-      console.error("Raw response:", aiResponse);
-      
-      // Return a fallback result
-      return {
-        potentialRating: 5,
-        summaryText: `Analysis of ${stock.symbol} based on recent news.`,
-        predictedMovementDirection: 'stable',
-        breakingNewsCount: null,
-        positiveNewsCount: null,
-        negativeNewsCount: null,
-        neutralNewsCount: null,
-        priceTargets: {
-          low: null,
-          high: null
-        },
-        evidencePoints: [`Unable to analyze news for ${stock.symbol} due to API response format error.`],
-        shortTermOutlook: null,
-        longTermOutlook: null
-      };
+    } catch (parseError) {
+      console.error("Failed to parse AI response as JSON:", parseError);
+      console.log("Raw AI response:", aiResponse);
+      throw new Error("Error parsing DeepSeek response");
     }
   } catch (error) {
-    console.error("Error calling DeepSeek API:", error);
-    throw error;
+    console.error(`Error analyzing news for ${stock.symbol}:`, error);
+
+    // Return a fallback analysis
+    return {
+      potentialRating: 5,
+      summaryText: `Unable to analyze news for ${stock.symbol} due to API issues.`,
+      predictedMovementDirection: "stable",
+      breakingNewsCount: null,
+      positiveNewsCount: null,
+      negativeNewsCount: null,
+      neutralNewsCount: null,
+      priceTargets: {
+        low: stock.currentPrice ? parseFloat((stock.currentPrice * 0.97).toFixed(2)) : null,
+        high: stock.currentPrice ? parseFloat((stock.currentPrice * 1.03).toFixed(2)) : null
+      },
+      evidencePoints: ["Fallback analysis due to API error."],
+      shortTermOutlook: null,
+      longTermOutlook: null
+    };
   }
 }
 
