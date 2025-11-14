@@ -1,6 +1,5 @@
 import type { Express, Request, Response, NextFunction } from "express";
 import { createServer, type Server } from "http";
-import { storage } from "./storage";
 import { 
   contactSchema, 
   newsletterSchema, 
@@ -39,6 +38,24 @@ import { semiengineeringService } from "./services/semiengineeringService";
 import { spawn } from "child_process";
 import path from "path";
 import fs from "fs";
+
+// Lazy load storage to avoid initialization issues in serverless environments
+let storageInstance: any = null;
+
+async function getStorage() {
+  if (!storageInstance) {
+    console.log('[Vercel] Lazy loading storage instance...');
+    try {
+      const { storage } = await import("./storage");
+      storageInstance = storage;
+      console.log('[Vercel] Storage instance loaded successfully');
+    } catch (error) {
+      console.error('[Vercel] Failed to load storage:', error);
+      throw error;
+    }
+  }
+  return storageInstance;
+}
 
 // Setup data refresh interval (30 seconds)
 let updateInterval: NodeJS.Timeout;
@@ -240,6 +257,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.post("/api/contact", async (req, res) => {
     try {
       const validatedData = contactSchema.parse(req.body);
+      const storage = await getStorage();
       const contactSubmission = await storage.createContactSubmission(validatedData);
       return res.status(200).json({ success: true, data: contactSubmission });
     } catch (error) {
@@ -260,6 +278,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.post("/api/newsletter", async (req, res) => {
     try {
       const validatedData = newsletterSchema.parse(req.body);
+      const storage = await getStorage();
       const newsletterSubscription = await storage.createNewsletterSubscription(validatedData);
       return res.status(200).json({ success: true, data: newsletterSubscription });
     } catch (error) {
@@ -282,6 +301,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Get all stocks
   app.get("/api/stocks", async (req, res) => {
     try {
+      const storage = await getStorage();
       const stocks = await storage.getStocks();
       return res.status(200).json({ success: true, data: stocks });
     } catch (error) {
@@ -530,6 +550,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const limit = req.query.limit ? parseInt(req.query.limit as string) : 10;
       
       console.log(`[Vercel] Fetching top ${limit} stock picks with real AI analysis...`);
+      
+      // Get the storage instance
+      const storage = await getStorage();
       
       // Get the top picks with highest potential rating
       console.log(`[Vercel] Calling storage.getTopRatedStockAnalyses with limit ${limit}`);
