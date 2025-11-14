@@ -82,6 +82,7 @@ export class MemStorage implements IStorage {
   currentUserWatchlistId: number;
 
   constructor() {
+    console.log('[Vercel] Initializing MemStorage...');
     this.users = new Map();
     this.contactSubmissions = new Map();
     this.newsletterSubscriptions = new Map();
@@ -103,7 +104,9 @@ export class MemStorage implements IStorage {
     this.currentUserWatchlistId = 1;
     
     // Initialize with some sample data
+    console.log('[Vercel] Loading sample data...');
     this.initializeSampleData();
+    console.log('[Vercel] MemStorage initialized successfully');
   }
 
   // User methods
@@ -268,8 +271,18 @@ export class MemStorage implements IStorage {
   }
   
   async getTopRatedStockAnalyses(limit: number = 5): Promise<StockAnalysis[]> {
-    const analyses = Array.from(this.stockAnalyses.values())
-      .filter(analysis => analysis.predictedMovementDirection === 'up')
+    console.log(`[Vercel] getTopRatedStockAnalyses called with limit: ${limit}`);
+    console.log(`[Vercel] Total stock analyses available: ${this.stockAnalyses.size}`);
+    
+    const allAnalyses = Array.from(this.stockAnalyses.values());
+    console.log(`[Vercel] All analyses:`, allAnalyses.map(a => ({ symbol: a.stockSymbol, rating: a.potentialRating, direction: a.predictedMovementDirection })));
+    
+    const analyses = allAnalyses
+      .filter(analysis => {
+        const matches = analysis.predictedMovementDirection === 'up';
+        console.log(`[Vercel] Analysis ${analysis.stockSymbol} direction: ${analysis.predictedMovementDirection}, matches filter: ${matches}`);
+        return matches;
+      })
       .sort((a, b) => {
         // Sort by potential rating and confidence score
         if (a.potentialRating !== b.potentialRating) {
@@ -279,14 +292,19 @@ export class MemStorage implements IStorage {
       })
       .slice(0, limit);
     
+    console.log(`[Vercel] Filtered and sorted analyses: ${analyses.length}`);
+    
     // If no analyses are found, return some default ones to ensure UI always has data
     if (analyses.length === 0) {
-      // Find any analyses we can use
-      return Array.from(this.stockAnalyses.values())
+      console.log(`[Vercel] No analyses found with 'up' direction, returning top rated analyses`);
+      const fallbackAnalyses = allAnalyses
         .sort((a, b) => b.potentialRating - a.potentialRating)
         .slice(0, limit);
+      console.log(`[Vercel] Fallback analyses: ${fallbackAnalyses.length}`);
+      return fallbackAnalyses;
     }
     
+    console.log(`[Vercel] Returning ${analyses.length} top rated analyses`);
     return analyses;
   }
   
@@ -379,6 +397,7 @@ export class MemStorage implements IStorage {
   
   // Initialize with sample data
   private initializeSampleData() {
+    console.log('[Vercel] Starting initializeSampleData...');
     // Sample stocks - Representing a wide range of NASDAQ stocks including big tech and smaller companies
     const sampleStocks: InsertStock[] = [
       // Big Tech Companies
@@ -1119,9 +1138,11 @@ export class MemStorage implements IStorage {
     ];
     
     // Create stock analyses
+    console.log(`[Vercel] Creating ${sampleAnalyses.length} sample analyses...`);
     sampleAnalyses.forEach(analysis => {
       this.createStockAnalysis(analysis);
     });
+    console.log(`[Vercel] Sample data initialization completed. Stocks: ${this.stocks.size}, Analyses: ${this.stockAnalyses.size}, News: ${this.newsItems.size}`);
   }
 }
 

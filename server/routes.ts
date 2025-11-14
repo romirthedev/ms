@@ -529,19 +529,25 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const limit = req.query.limit ? parseInt(req.query.limit as string) : 10;
       
-      console.log(`Fetching top ${limit} stock picks with real AI analysis...`);
+      console.log(`[Vercel] Fetching top ${limit} stock picks with real AI analysis...`);
       
       // Get the top picks with highest potential rating
+      console.log(`[Vercel] Calling storage.getTopRatedStockAnalyses with limit ${limit}`);
       const topAnalyses = await storage.getTopRatedStockAnalyses(limit);
-      console.log(`Found ${topAnalyses.length} top-rated stock analyses`);
+      console.log(`[Vercel] Found ${topAnalyses.length} top-rated stock analyses`);
       
       // Transform the data to include more stock information
+      console.log(`[Vercel] Transforming data for ${topAnalyses.length} analyses`);
       const analyses = await Promise.all(topAnalyses.map(async (analysis) => {
+        console.log(`[Vercel] Processing analysis for ${analysis.stockSymbol}`);
+        
         // Get the corresponding stock info
         const stock = await storage.getStockBySymbol(analysis.stockSymbol);
+        console.log(`[Vercel] Retrieved stock data for ${analysis.stockSymbol}:`, stock ? 'found' : 'not found');
         
         // Fetch the latest news for this stock for evidence sources
         const latestNews = await storage.getNewsItemsByStockSymbol(analysis.stockSymbol, 3);
+        console.log(`[Vercel] Retrieved ${latestNews.length} news items for ${analysis.stockSymbol}`);
         
         return {
           ...analysis,
@@ -561,11 +567,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
         };
       }));
       
-      console.log(`Returning ${analyses.length} top picks with real AI analysis`);
+      console.log(`[Vercel] Returning ${analyses.length} top picks with real AI analysis`);
       return res.status(200).json({ success: true, data: analyses });
     } catch (error) {
-      console.error("Error fetching top analyses:", error);
-      return res.status(500).json({ success: false, message: "Failed to fetch top analyses" });
+      console.error("[Vercel] Error fetching top analyses:", error);
+      console.error("[Vercel] Error stack:", error.stack);
+      return res.status(500).json({ success: false, message: "Failed to fetch top analyses", error: error.message });
     }
   });
   
