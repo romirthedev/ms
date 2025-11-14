@@ -7,12 +7,20 @@ async function throwIfResNotOk(res: Response) {
   }
 }
 
+const API_BASE = (import.meta as any).env?.VITE_API_BASE_URL || '';
+
+function withBase(url: string): string {
+  if (url.startsWith('http://') || url.startsWith('https://')) return url;
+  if (!API_BASE) return url;
+  return `${API_BASE}${url}`;
+}
+
 export async function apiRequest(
   method: string,
   url: string,
   data?: unknown | undefined,
 ): Promise<Response> {
-  const res = await fetch(url, {
+  const res = await fetch(withBase(url), {
     method,
     headers: data ? { "Content-Type": "application/json" } : {},
     body: data ? JSON.stringify(data) : undefined,
@@ -29,7 +37,7 @@ export const getQueryFn: <T>(options: {
 }) => QueryFunction<T> =
   ({ on401: unauthorizedBehavior }) =>
   async ({ queryKey }) => {
-    const res = await fetch(queryKey[0] as string, {
+    const res = await fetch(withBase(queryKey[0] as string), {
       credentials: "include",
     });
 

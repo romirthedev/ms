@@ -231,8 +231,10 @@ function getRatingRecommendation(rating: number): string {
 }
 
 export async function registerRoutes(app: Express): Promise<Server> {
-  // Start the periodic data updates
-  startDataUpdateInterval();
+  // Start the periodic data updates (skip on Vercel serverless)
+  if (!process.env.VERCEL) {
+    startDataUpdateInterval();
+  }
 
   // API routes for form submissions
   app.post("/api/contact", async (req, res) => {

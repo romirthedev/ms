@@ -588,7 +588,7 @@ const DashboardPage = () => {
     data: stockNews, 
     isLoading: loadingNews 
   } = useQuery<{ success: boolean; data: NewsItem[] }>({
-    queryKey: ['/api/news/stock', selectedStock],
+    queryKey: [selectedStock ? `/api/news/stock/${selectedStock}?limit=25&windowHours=24` : ''],
     enabled: selectedStock !== null,
   });
   
@@ -597,7 +597,7 @@ const DashboardPage = () => {
     data: stockAnalysis, 
     isLoading: loadingAnalysis 
   } = useQuery<{ success: boolean; data: StockAnalysis }>({
-    queryKey: ['/api/analyses/stock', selectedStock],
+    queryKey: [selectedStock ? `/api/analyses/stock/${selectedStock}` : ''],
     enabled: selectedStock !== null,
   });
   
