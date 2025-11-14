@@ -42,15 +42,32 @@ import fs from "fs";
 // Lazy load storage to avoid initialization issues in serverless environments
 let storageInstance: any = null;
 
-async function getStorage() {
+async function getStorage(loadSampleData = false) {
   if (!storageInstance) {
     console.log('[Vercel] Lazy loading storage instance...');
     try {
-      const { storage } = await import("./storage");
-      storageInstance = storage;
+      console.log('[Vercel] Attempting to import storage module...');
+      const storageModule = await import("./storage");
+      console.log('[Vercel] Storage module imported:', typeof storageModule);
+      console.log('[Vercel] Storage module keys:', Object.keys(storageModule));
+      
+      if (!storageModule.storage) {
+        throw new Error('Storage module does not export a storage instance');
+      }
+      
+      storageInstance = storageModule.storage;
+      console.log('[Vercel] Storage instance assigned:', typeof storageInstance);
+      
+      // Optionally load sample data asynchronously
+      if (loadSampleData && storageInstance.initializeAsync) {
+        console.log('[Vercel] Loading sample data...');
+        await storageInstance.initializeAsync();
+      }
+      
       console.log('[Vercel] Storage instance loaded successfully');
     } catch (error) {
       console.error('[Vercel] Failed to load storage:', error);
+      console.error('[Vercel] Error stack:', error.stack);
       throw error;
     }
   }
@@ -556,8 +573,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
       
       // Get the top picks with highest potential rating
       console.log(`[Vercel] Calling storage.getTopRatedStockAnalyses with limit ${limit}`);
-      const topAnalyses = await storage.getTopRatedStockAnalyses(limit);
-      console.log(`[Vercel] Found ${topAnalyses.length} top-rated stock analyses`);
+      let topAnalyses;
+      try {
+        topAnalyses = await storage.getTopRatedStockAnalyses(limit);
+        console.log(`[Vercel] Found ${topAnalyses.length} top-rated stock analyses`);
+      } catch (methodError) {
+        console.error(`[Vercel] Error calling getTopRatedStockAnalyses:`, methodError);
+        console.error(`[Vercel] Method error stack:`, methodError.stack);
+        throw methodError;
+      }
       
       // Transform the data to include more stock information
       console.log(`[Vercel] Transforming data for ${topAnalyses.length} analyses`);

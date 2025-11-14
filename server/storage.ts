@@ -103,10 +103,14 @@ export class MemStorage implements IStorage {
     this.currentStockAnalysisId = 1;
     this.currentUserWatchlistId = 1;
     
-    // Initialize with some sample data
-    console.log('[Vercel] Loading sample data...');
-    this.initializeSampleData();
     console.log('[Vercel] MemStorage initialized successfully');
+  }
+
+  // Async initialization method - call this separately if needed
+  async initializeAsync(): Promise<void> {
+    console.log('[Vercel] Loading sample data asynchronously...');
+    this.initializeSampleData();
+    console.log('[Vercel] Sample data loaded successfully');
   }
 
   // User methods
