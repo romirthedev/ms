@@ -23,8 +23,14 @@ function detectSymbols(text: string): string[] {
   const upper = text.toUpperCase()
   const lower = text.toLowerCase()
   const set = new Set<string>()
-  const matches = upper.match(/\b[A-Z]{1,5}\b/g) || []
-  for (const t of matches) {
+  const raw: string[] = []
+  const plain = upper.match(/\b[A-Z]{1,5}\b/g) || []
+  raw.push(...plain)
+  const cash = upper.match(/\$([A-Z]{1,5})/g) || []
+  for (const m of cash) raw.push(m.replace('$',''))
+  const colon = upper.match(/\b(?:NYSE|NASDAQ|AMEX):([A-Z]{1,5})\b/g) || []
+  for (const m of colon) raw.push(m.split(':')[1])
+  for (const t of raw) {
     if (symbols.has(t) && !['A','I','AM','PM','CEO','CFO','CTO','IPO','AI','ML'].includes(t)) set.add(t)
   }
   nameToSymbol.forEach((sym, name) => { if (lower.includes(name)) set.add(sym) })
@@ -78,12 +84,17 @@ async function upsert(item: { title: string; link: string; pubDate?: Date }): Pr
     }
   }
   const sentiment = simpleBrowserService.analyzeSentiment(text)
+  let inferredSource = (() => {
+    const m = text.match(/\s[-–—]\s([^|]+)$/)
+    if (m && m[1]) return m[1].trim()
+    return null
+  })() || 'Google News RSS'
   const news: InsertNewsItem = {
     title: item.title,
     content: item.title,
     url: item.link,
     imageUrl: null,
-    source: 'Google News RSS',
+    source: inferredSource,
     publishedAt: item.pubDate || new Date(),
     stockSymbols: symbols,
     sentiment: sentiment.score,
@@ -112,7 +123,32 @@ async function updateGoogleNews(): Promise<{ ingested: number }> {
       if (inserted) ingested++
     }
   }
+  const stocks = await storage.getStocks()
+  for (const s of stocks.slice(0, 20)) {
+    const query = `${s.symbol} OR ${s.companyName}`
+    const feed = await fetchTopic(query)
+    for (const it of feed.slice(0, 10)) {
+      const inserted = await upsert(it)
+      if (inserted) ingested++
+    }
+  }
   return { ingested }
 }
 
 export const googleNewsRssService = { updateGoogleNews }
+
+async function updateForSymbol(symbol: string, companyName: string, maxItems: number = 15): Promise<{ ingested: number }> {
+  if (!symbolCache) await buildSymbolCache()
+  let ingested = 0
+  const queries = [symbol, companyName]
+  for (const q of queries) {
+    const feed = await fetchTopic(q)
+    for (const it of feed.slice(0, maxItems)) {
+      const inserted = await upsert(it)
+      if (inserted) ingested++
+    }
+  }
+  return { ingested }
+}
+
+export const googleNewsOnDemand = { updateForSymbol }

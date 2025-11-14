@@ -7,7 +7,6 @@ import FeaturesSection from './FeaturesSection';
 import HowItWorksSection from './HowItWorksSection';
 import DemoSection from './DemoSection';
 import ComparisonSection from './ComparisonSection';
-import PricingSection from './PricingSection';
 import TestimonialsSection from './TestimonialsSection';
 import CtaSection from './CtaSection';
 import ContactSection from './ContactSection';
@@ -53,7 +52,7 @@ const HomePage = () => {
         <HowItWorksSection />
         <DemoSection />
         <ComparisonSection />
-        <PricingSection />
+
         <TestimonialsSection />
         <CtaSection />
         <ContactSection />

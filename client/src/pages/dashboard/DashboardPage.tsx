@@ -1,6 +1,5 @@
 import React, { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { useAuth } from '@/hooks/use-auth';
 import { Link } from 'wouter';
 import { Stock, StockAnalysis as BaseStockAnalysis, NewsItem } from '@shared/schema';
 import { 
@@ -104,8 +103,9 @@ interface AIAnalysisResult {
 
 // Component to display news sources for a stock
 const StockNewsSources: React.FC<{ stockSymbol: string }> = ({ stockSymbol }) => {
+  const [limit, setLimit] = useState(25);
   const { data, isLoading } = useQuery<{ success: boolean; data: NewsItem[] }>({
-    queryKey: [`/api/news/stock/${stockSymbol}`],
+    queryKey: [`/api/news/stock/${stockSymbol}?limit=${limit}&windowHours=24`],
     enabled: !!stockSymbol,
   });
 
@@ -163,6 +163,13 @@ const StockNewsSources: React.FC<{ stockSymbol: string }> = ({ stockSymbol }) =>
       'CNBC': 'https://www.cnbc.com',
       'Bloomberg': 'https://www.bloomberg.com',
       'Reuters': 'https://www.reuters.com',
+      'Techmeme': 'https://techmeme.com',
+      'Lobsters': 'https://lobste.rs',
+      'TechCrunch': 'https://techcrunch.com',
+      'Google News RSS': 'https://news.google.com',
+      'Hacker News': 'https://news.ycombinator.com',
+      'Reddit': 'https://www.reddit.com',
+      'Trending': 'https://www.reddit.com/r/stocks',
       'Forbes': 'https://www.forbes.com',
       'The Wall Street Journal': 'https://www.wsj.com',
       'Financial Times': 'https://www.ft.com',
@@ -338,6 +345,9 @@ const StockNewsSources: React.FC<{ stockSymbol: string }> = ({ stockSymbol }) =>
             </a>
           );
         })}
+      </div>
+      <div className="mt-2 flex justify-center">
+        <Button variant="outline" size="sm" onClick={() => setLimit(limit + 25)}>Load more</Button>
       </div>
       {analysisData?.data?.priceTargets && (
         <div className="mt-4 p-2 bg-gray-50 rounded-lg border">
@@ -541,7 +551,6 @@ const AINewsAnalysis: React.FC<{ stockSymbol: string }> = ({ stockSymbol }) => {
 };
 
 const DashboardPage = () => {
-  const { user } = useAuth();
   const { toast } = useToast();
   const [activeTab, setActiveTab] = useState('top-picks');
   const [selectedStock, setSelectedStock] = useState<string | null>(null);
@@ -564,14 +573,14 @@ const DashboardPage = () => {
     enabled: activeTab === 'all-stocks'
   });
   
-  // Fetch user's watchlist
+  // Fetch watchlist (now available to all users)
   const { 
     data: watchlist, 
     isLoading: loadingWatchlist,
     refetch: refetchWatchlist
   } = useQuery<{ success: boolean; data: any[] }>({
     queryKey: ['/api/watchlist'],
-    enabled: user !== null && activeTab === 'watchlist'
+    enabled: activeTab === 'watchlist'
   });
   
   // Fetch news for selected stock
@@ -609,15 +618,6 @@ const DashboardPage = () => {
   };
   
   const addToWatchlist = async (stockId: number) => {
-    if (!user) {
-      toast({
-        title: "Authentication Required",
-        description: "Please log in to add stocks to your watchlist",
-        variant: "destructive"
-      });
-      return;
-    }
-    
     try {
       await apiRequest('POST', '/api/watchlist', { stockId });
       toast({
@@ -1187,12 +1187,7 @@ const DashboardPage = () => {
                   </CardDescription>
                 </CardHeader>
                 <CardContent>
-                  {!user ? (
-                    <div className="text-center py-8">
-                      <p className="text-gray-500 mb-4">Please log in to view your watchlist</p>
-                      <Button>Log In</Button>
-                    </div>
-                  ) : loadingWatchlist ? (
+                  {loadingWatchlist ? (
                     <div className="text-center py-4">Loading watchlist...</div>
                   ) : watchlist && watchlist.data && watchlist.data.length > 0 ? (
                     <div className="rounded-md border">

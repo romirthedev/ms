@@ -1,6 +1,5 @@
 import React, { useState } from 'react';
 import { Link, useLocation } from 'wouter';
-import { useAuth } from '@/hooks/use-auth';
 import { Button } from '@/components/ui/button';
 import { LogOut, User, BarChart3 } from 'lucide-react';
 
@@ -21,23 +20,10 @@ const NavLink = ({ href, children, className = '' }: NavLinkProps) => (
 
 const Navbar = () => {
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
-  const { user, logoutMutation } = useAuth();
   const [, navigate] = useLocation();
 
   const toggleMobileMenu = () => {
     setIsMobileMenuOpen(!isMobileMenuOpen);
-  };
-
-  const handleLogout = () => {
-    logoutMutation.mutate(undefined, {
-      onSuccess: () => {
-        navigate('/auth');
-      }
-    });
-  };
-
-  const goToLogin = () => {
-    navigate('/auth');
   };
 
   return (
@@ -55,51 +41,20 @@ const Navbar = () => {
             <div className="hidden sm:ml-6 sm:flex sm:space-x-8">
               <NavLink href="#features">Features</NavLink>
               <NavLink href="#how-it-works">How It Works</NavLink>
-              <NavLink href="#pricing">Pricing</NavLink>
               <NavLink href="#testimonials">Testimonials</NavLink>
+              <NavLink href="/dashboard">Dashboard</NavLink>
             </div>
           </div>
           <div className="hidden sm:ml-6 sm:flex sm:items-center sm:space-x-4">
             <NavLink href="#contact">Contact</NavLink>
+            <Link href="/dashboard">
+              <span className="bg-accent text-white hover:bg-accent/90 px-4 py-2 rounded-md text-sm font-medium cursor-pointer">
+                Dashboard
+              </span>
+            </Link>
             <a href="#demo" className="bg-primary text-white hover:bg-primary/90 px-4 py-2 rounded-md text-sm font-medium">
               Try Demo
             </a>
-            
-            {user ? (
-              <div className="flex items-center space-x-4">
-                <Button 
-                  variant="outline" 
-                  size="sm" 
-                  onClick={() => navigate('/dashboard')}
-                  className="flex items-center space-x-1"
-                >
-                  <BarChart3 className="h-4 w-4 mr-1" />
-                  <span>Dashboard</span>
-                </Button>
-                <div className="flex items-center space-x-2 text-sm">
-                  <User className="h-4 w-4" />
-                  <span>{user.username}</span>
-                </div>
-                <Button 
-                  variant="outline" 
-                  size="sm" 
-                  onClick={handleLogout}
-                  disabled={logoutMutation.isPending}
-                  className="flex items-center space-x-1"
-                >
-                  <LogOut className="h-4 w-4 mr-1" />
-                  <span>Logout</span>
-                </Button>
-              </div>
-            ) : (
-              <Button 
-                variant="outline" 
-                size="sm" 
-                onClick={goToLogin}
-              >
-                Login
-              </Button>
-            )}
           </div>
           <div className="-mr-2 flex items-center sm:hidden">
             <button
@@ -144,17 +99,16 @@ const Navbar = () => {
             How It Works
           </a>
           <a
-            href="#pricing"
-            className="block pl-3 pr-4 py-2 border-l-4 border-transparent text-base font-medium text-gray-600 hover:bg-gray-50 hover:border-gray-300 hover:text-gray-800"
-          >
-            Pricing
-          </a>
-          <a
             href="#testimonials"
             className="block pl-3 pr-4 py-2 border-l-4 border-transparent text-base font-medium text-gray-600 hover:bg-gray-50 hover:border-gray-300 hover:text-gray-800"
           >
             Testimonials
           </a>
+          <Link href="/dashboard">
+            <span className="block pl-3 pr-4 py-2 border-l-4 border-transparent text-base font-medium text-gray-600 hover:bg-gray-50 hover:border-gray-300 hover:text-gray-800 cursor-pointer">
+              Dashboard
+            </span>
+          </Link>
           <a
             href="#contact"
             className="block pl-3 pr-4 py-2 border-l-4 border-transparent text-base font-medium text-gray-600 hover:bg-gray-50 hover:border-gray-300 hover:text-gray-800"
@@ -167,43 +121,6 @@ const Navbar = () => {
           >
             Try Demo
           </a>
-          
-          {user ? (
-            <div className="flex flex-col items-center mt-4">
-              <div className="flex items-center space-x-2 text-sm mb-2">
-                <User className="h-4 w-4" />
-                <span>{user.username}</span>
-              </div>
-              <Button 
-                variant="outline" 
-                size="sm" 
-                onClick={() => navigate('/dashboard')}
-                className="flex items-center space-x-1 w-full justify-center mx-4 mb-2"
-              >
-                <BarChart3 className="h-4 w-4 mr-1" />
-                <span>Dashboard</span>
-              </Button>
-              <Button 
-                variant="outline" 
-                size="sm" 
-                onClick={handleLogout}
-                disabled={logoutMutation.isPending}
-                className="flex items-center space-x-1 w-full justify-center mx-4"
-              >
-                <LogOut className="h-4 w-4 mr-1" />
-                <span>Logout</span>
-              </Button>
-            </div>
-          ) : (
-            <Button 
-              variant="outline" 
-              size="sm" 
-              onClick={goToLogin}
-              className="w-full mx-4"
-            >
-              Login
-            </Button>
-          )}
         </div>
       </div>
     </nav>

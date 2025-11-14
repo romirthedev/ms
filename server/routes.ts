@@ -12,7 +12,6 @@ import {
 } from "@shared/schema";
 import { ZodError } from "zod";
 import { fromZodError } from "zod-validation-error";
-import { setupAuth } from "./auth";
 import { newsService } from "./services/newsService";
 import { browserScrapingService } from "./services/browserScrapingService";
 import { simpleBrowserService } from "./services/simpleBrowserService"; 
@@ -30,7 +29,7 @@ import { lobstersService } from "./services/lobstersService";
 import { techcrunchService } from "./services/techcrunchService";
 import { cnbcService } from "./services/cnbcService";
 import { reutersService } from "./services/reutersService";
-import { googleNewsRssService } from "./services/googleNewsRssService";
+import { googleNewsRssService, googleNewsOnDemand } from "./services/googleNewsRssService";
 import { fiercebiotechService } from "./services/fiercebiotechService";
 import { nasaService } from "./services/nasaService";
 import { esaService } from "./services/esaService";
@@ -40,17 +39,6 @@ import { semiengineeringService } from "./services/semiengineeringService";
 import { spawn } from "child_process";
 import path from "path";
 import fs from "fs";
-
-// Middleware to check if user is authenticated
-const isAuthenticated = (req: Request, res: any, next: any) => {
-  if (req.isAuthenticated()) {
-    return next();
-  }
-  return res.status(401).json({ 
-    success: false, 
-    message: "Authentication required" 
-  });
-};
 
 // Setup data refresh interval (30 seconds)
 let updateInterval: NodeJS.Timeout;
@@ -243,9 +231,6 @@ function getRatingRecommendation(rating: number): string {
 }
 
 export async function registerRoutes(app: Express): Promise<Server> {
-  // Set up authentication routes
-  setupAuth(app);
-  
   // Start the periodic data updates
   startDataUpdateInterval();
 
@@ -316,7 +301,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         
         // Use our simple service directly
         console.log("About to run the yfinance service...");
-        const yfinanceResult = await runSimpleYfinanceService(industry, 50);
+        const yfinanceResult: any = await getTopLosers(industry || null, 50);
         console.log("Python script result:", JSON.stringify(yfinanceResult).substring(0, 100) + '...');
         
         if (yfinanceResult && yfinanceResult.success && yfinanceResult.data) {
@@ -464,9 +449,50 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Get news items for a specific stock
   app.get("/api/news/stock/:symbol", async (req, res) => {
     try {
-      const limit = req.query.limit ? parseInt(req.query.limit as string) : 10;
-      const news = await storage.getNewsItemsByStockSymbol(req.params.symbol, limit);
-      return res.status(200).json({ success: true, data: news });
+      const limit = req.query.limit ? parseInt(req.query.limit as string) : 25;
+      const windowHours = req.query.windowHours ? parseInt(req.query.windowHours as string) : 48;
+      const symbol = req.params.symbol.toUpperCase();
+      let news = await storage.getNewsItemsByStockSymbol(symbol, limit);
+
+      if (news.length < limit) {
+        const stock = await storage.getStockBySymbol(symbol);
+        const recent = await storage.getNewsItems(500);
+        const companyName = (stock?.companyName || '').toLowerCase();
+        const exists = new Set(news.map(n => n.id));
+        for (const n of recent) {
+          if (exists.has(n.id)) continue;
+          const text = `${n.title} ${n.content}`;
+          const upper = text.toUpperCase();
+          const lower = text.toLowerCase();
+          const hasTicker = upper.includes(symbol);
+          const hasName = companyName && lower.includes(companyName);
+          if (hasTicker || hasName) {
+            news.push(n);
+            if (news.length >= limit) break;
+          }
+        }
+        news = news.sort((a, b) => b.publishedAt.getTime() - a.publishedAt.getTime()).slice(0, limit);
+        if (news.length < limit && stock) {
+          await googleNewsOnDemand.updateForSymbol(symbol, stock.companyName, 10);
+          const refreshed = await storage.getNewsItemsByStockSymbol(symbol, limit);
+          if (refreshed.length > news.length) news = refreshed;
+        }
+      }
+
+      const cutoff = Date.now() - windowHours * 60 * 60 * 1000;
+      const relevant = news.filter(n => {
+        const text = `${n.title} ${n.content}`;
+        const upper = text.toUpperCase();
+        const recent = n.publishedAt.getTime() >= cutoff;
+        const hasTicker = upper.includes(symbol);
+        const tagged = Array.isArray((n as any).stockSymbols) && (n as any).stockSymbols.includes(symbol);
+        return recent && (hasTicker || tagged);
+      });
+      const nonGoogle = relevant.filter(n => n.source !== 'Google News RSS');
+      const google = relevant.filter(n => n.source === 'Google News RSS');
+      const combined = [...nonGoogle, ...google].slice(0, limit);
+
+      return res.status(200).json({ success: true, data: combined });
     } catch (error) {
       return res.status(500).json({ success: false, message: "Failed to fetch stock news" });
     }
@@ -541,392 +567,52 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
   
-  // User watchlist routes (protected by authentication)
-  
-  // Get user's watchlist
-  app.get("/api/watchlist", isAuthenticated, async (req, res) => {
+  // Create a new stock (for testing purposes)
+  app.post("/api/stocks", async (req, res) => {
     try {
-      const watchlist = await storage.getUserWatchlists(req.user!.id);
-      return res.status(200).json({ success: true, data: watchlist });
-    } catch (error) {
-      return res.status(500).json({ success: false, message: "Failed to fetch watchlist" });
-    }
-  });
-  
-  // Add stock to watchlist
-  app.post("/api/watchlist", isAuthenticated, async (req, res) => {
-    try {
-      const validatedData = insertUserWatchlistSchema.parse({
-        ...req.body,
-        userId: req.user!.id
-      });
-      
-      const watchlistItem = await storage.addToWatchlist(validatedData);
-      return res.status(200).json({ success: true, data: watchlistItem });
+      const validatedData = insertStockSchema.parse(req.body);
+      const stock = await storage.createStock(validatedData);
+      return res.status(201).json({ success: true, data: stock });
     } catch (error) {
       if (error instanceof ZodError) {
         const validationError = fromZodError(error);
         return res.status(400).json({ success: false, message: validationError.message });
       }
-      return res.status(500).json({ success: false, message: "Failed to add to watchlist" });
-    }
-  });
-  
-  // Remove stock from watchlist
-  app.delete("/api/watchlist/:stockId", isAuthenticated, async (req, res) => {
-    try {
-      const stockId = parseInt(req.params.stockId);
-      const removed = await storage.removeFromWatchlist(req.user!.id, stockId);
-      
-      if (!removed) {
-        return res.status(404).json({ success: false, message: "Item not found in watchlist" });
-      }
-      
-      return res.status(200).json({ success: true, message: "Removed from watchlist" });
-    } catch (error) {
-      return res.status(500).json({ success: false, message: "Failed to remove from watchlist" });
-    }
-  });
-  
-  // Manual update endpoints (for testing or admin use)
-  
-  // Manually trigger news update
-  app.post("/api/admin/update-news", async (req, res) => {
-    try {
-      await newsService.updateAllStockNews();
-      return res.status(200).json({ success: true, message: "News update triggered successfully using NewsAPI" });
-    } catch (error) {
-      return res.status(500).json({ success: false, message: "Failed to trigger news update" });
-    }
-  });
-  
-  // Manually trigger analysis update
-  app.post("/api/admin/update-analyses", async (req, res) => {
-    try {
-      // Use our local analysis service instead of external AI API
-      await localAnalysisService.updateAllStockAnalyses();
-      return res.status(200).json({ success: true, message: "Analysis update triggered successfully using local algorithm" });
-    } catch (error) {
-      return res.status(500).json({ success: false, message: "Failed to trigger analysis update" });
+      return res.status(500).json({ success: false, message: "Failed to create stock" });
     }
   });
 
-  // Manually trigger Reddit ingestion
-  app.post("/api/admin/update-reddit", async (req, res) => {
+  // Create a new news item (for testing purposes)
+  app.post("/api/news", async (req, res) => {
     try {
-      const result = await redditService.updateRecentPosts();
-      return res.status(200).json({ success: true, message: `Reddit update ingested ~${result.ingested} posts` });
+      const validatedData = insertNewsItemSchema.parse(req.body);
+      const newsItem = await storage.createNewsItem(validatedData);
+      return res.status(201).json({ success: true, data: newsItem });
     } catch (error) {
-      return res.status(500).json({ success: false, message: "Failed to trigger Reddit update" });
-    }
-  });
-  
-  // Helper function to run the simpleYfinanceService.py script
-  async function runSimpleYfinanceService(industry: string | undefined, limit: number): Promise<any> {
-    return new Promise((resolve, reject) => {
-      try {
-        // Get the current directory
-        const currentDir = path.resolve();
-        const scriptPath = path.join(currentDir, 'server/services/simpleYfinanceService.py');
-        
-        console.log(`Running script at ${scriptPath}`);
-        
-        // Check if file exists
-        if (!fs.existsSync(scriptPath)) {
-          console.error(`Python script not found at ${scriptPath}`);
-          return reject(new Error(`Python script not found at ${scriptPath}`));
-        }
-        
-        // Build command arguments - very important to have the command first
-        const args = [scriptPath, 'get_top_losers'];
-        
-        // Add industry filter if provided
-        if (industry && industry !== 'all') {
-          args.push('--industry');
-          args.push(industry);
-        }
-        
-        // Add limit
-        args.push('--limit');
-        args.push(limit.toString());
-        
-        console.log('Running Python with args:', args);
-        console.log(`Full command: python3 ${args.join(' ')}`);
-        
-        // Execute the Python script
-        const pythonProcess = spawn('python3', args);
-        
-        let dataString = '';
-        let errorString = '';
-        
-        pythonProcess.stdout.on('data', (data) => {
-          const chunk = data.toString();
-          console.log(`Python stdout chunk: ${chunk.substring(0, 100)}...`);
-          dataString += chunk;
-        });
-        
-        pythonProcess.stderr.on('data', (data) => {
-          const chunk = data.toString();
-          console.error(`Python stderr: ${chunk}`);
-          errorString += chunk;
-        });
-        
-        pythonProcess.on('close', (code) => {
-          console.log(`Python process exited with code ${code}`);
-          
-          if (code !== 0) {
-            console.error(`Python process error: ${errorString}`);
-            return reject(new Error(`Python process exited with code ${code}: ${errorString}`));
-          }
-          
-          try {
-            // Debug the raw output
-            console.log(`Raw Python output length: ${dataString.length} characters`);
-            if (dataString.trim() === '') {
-              return reject(new Error('Python script produced no output'));
-            }
-            
-            const result = JSON.parse(dataString);
-            console.log(`Successfully parsed JSON result with ${result.data ? result.data.length : 0} items`);
-            resolve(result);
-          } catch (error: unknown) {
-            const err = error instanceof Error ? error : new Error(String(error));
-            console.error(`Failed to parse Python output: ${err.message}`);
-            console.error(`Raw output (first 200 chars): ${dataString.substring(0, 200)}`);
-            reject(new Error(`Failed to parse Python output: ${err.message}`));
-          }
-        });
-        
-        // Handle process errors
-        pythonProcess.on('error', (error: Error) => {
-          console.error(`Failed to start Python process: ${error.message}`);
-          reject(new Error(`Failed to start Python process: ${error.message}`));
-        });
-      } catch (error: unknown) {
-        const err = error instanceof Error ? error : new Error(String(error));
-        console.error(`Error in runSimpleYfinanceService: ${err.message}`);
-        reject(err);
+      if (error instanceof ZodError) {
+        const validationError = fromZodError(error);
+        return res.status(400).json({ success: false, message: validationError.message });
       }
-    });
-  }
-
-  // Helper function to run the simpleDeepseekService.py script
-  async function runSimpleDeepseekService(symbol: string): Promise<any> {
-    return new Promise((resolve, reject) => {
-      // Get the current directory
-      const currentDir = path.resolve();
-      const scriptPath = path.join(currentDir, 'server/services/simpleDeepseekService.py');
-      
-      console.log(`Running deepseek script at ${scriptPath} for symbol ${symbol}`);
-      
-      // Check if file exists
-      try {
-        const fileExists = fs.existsSync(scriptPath);
-        console.log(`Script file exists: ${fileExists}`);
-        if (!fileExists) {
-          // List files in directory to see what we actually have
-          const serviceDir = path.join(currentDir, 'server/services');
-          console.log(`Listing files in ${serviceDir}:`);
-          const files = fs.readdirSync(serviceDir);
-          console.log(files);
-          return reject(new Error(`Python script not found at ${scriptPath}`));
-        }
-      } catch (error: unknown) {
-        const err = error instanceof Error ? error : new Error(String(error));
-        console.error(`Error checking for script file:`, err);
-      }
-      
-      console.log(`Full command: python3 ${scriptPath} --symbol ${symbol}`);
-      const pythonProcess = spawn('python3', [scriptPath, '--symbol', symbol]);
-      
-      let dataString = '';
-      let errorString = '';
-      
-      pythonProcess.stdout.on('data', (data) => {
-        const chunk = data.toString();
-        console.log(`Python stdout: ${chunk}`);
-        dataString += chunk;
-      });
-      
-      pythonProcess.stderr.on('data', (data) => {
-        const chunk = data.toString();
-        console.error(`Python stderr: ${chunk}`);
-        errorString += chunk;
-      });
-      
-      pythonProcess.on('close', (code) => {
-        console.log(`Python process exited with code ${code}`);
-        
-        if (code !== 0) {
-          return reject(new Error(`Python process exited with code ${code}: ${errorString}`));
-        }
-        
-        // Debug the raw output
-        console.log(`Raw Python output: ${dataString}`);
-        
-        try {
-          const result = JSON.parse(dataString);
-          resolve(result);
-        } catch (error: unknown) {
-          reject(new Error(`Failed to parse Python output: ${dataString.substring(0, 200)}...`));
-        }
-      });
-    });
-  }
-
-  // Alpha Vantage real-time price endpoints
-  
-  // Get additional information about a stock using DeepSeek integration
-  app.get("/api/deepseek/:symbol", async (req, res) => {
-    try {
-      const symbol = req.params.symbol;
-      console.log(`Fetching DeepSeek info for ${symbol} using simple service...`);
-      
-      // Use our simple DeepSeek service directly
-      const deepseekResult = await runSimpleDeepseekService(symbol);
-      return res.status(200).json(deepseekResult);
-    } catch (error) {
-      console.error("Error fetching DeepSeek info:", error);
-      return res.status(500).json({ success: false, message: "Failed to fetch DeepSeek information" });
-    }
-  });
-  
-  // AI Analysis for a specific stock using stored news + competitor context
-  app.get('/api/analyses/ai/:symbol', async (req, res) => {
-    const symbol = req.params.symbol.toUpperCase();
-    const stock = await storage.getStockBySymbol(symbol);
-    if (!stock) {
-      return res.status(404).json({ success: false, message: `Stock with symbol ${symbol} not found` });
-    }
-    try {
-      console.log(`Generating AI analysis for ${symbol} (${stock.companyName}) using stored news...`);
-      const newsItems = await storage.getNewsItemsByStockSymbol(symbol, 12);
-      const articlesUsed = newsItems.map(n => ({ id: n.id, title: n.title, source: n.source, url: n.url, publishedAt: n.publishedAt, sentiment: n.sentiment }));
-      let newsText = `Recent news articles for ${symbol} (${stock.companyName}):\n`;
-      newsText += articlesUsed.map((a, i) => `Article ${i + 1}:\nTitle: ${a.title}\nSource: ${a.source}\nTime: ${a.publishedAt.toISOString()}\nURL: ${a.url}\n---`).join('\n');
-      const competitors = Array.isArray(stock.competitors) ? stock.competitors : [];
-      if (competitors.length) {
-        newsText += `\nCompetitor context:`;
-        for (const comp of competitors.slice(0, 3)) {
-          const compStock = await storage.getStockBySymbol(comp);
-          if (compStock) {
-            const compNews = await storage.getNewsItemsByStockSymbol(comp, 3);
-            newsText += `\nCompetitor ${compStock.symbol} (${compStock.companyName}):`;
-            for (let i = 0; i < compNews.length; i++) {
-              const cn = compNews[i];
-              newsText += `\n- ${cn.title} [${cn.source}] (${cn.publishedAt.toISOString()}) ${cn.url}`;
-            }
-          }
-        }
-      }
-      const analysisResult = await deepseekAiService.analyzeStockNews(stock, newsText);
-      const response = {
-        ...analysisResult,
-        stock: { symbol: stock.symbol, companyName: stock.companyName, currentPrice: stock.currentPrice, priceChange: stock.priceChange, priceChangePercent: stock.priceChangePercent },
-        newsCount: articlesUsed.length,
-        newsArticles: articlesUsed,
-        source: 'Stored News + Reddit',
-        analysisMethod: 'DeepSeek AI',
-        analysisDate: new Date().toISOString()
-      };
-      if (!response.evidencePoints || response.evidencePoints.length === 0) {
-        response.evidencePoints = articlesUsed.slice(0,3).map(a => a.title);
-      }
-      return res.status(200).json({ success: true, data: response });
-    } catch (error: unknown) {
-      const errorMessage = error instanceof Error ? error.message : String(error);
-      console.error(`Error generating AI analysis for ${symbol}:`, error);
-      return res.status(500).json({ success: false, message: `Could not generate AI analysis for ${symbol}: ${errorMessage}` });
-    }
-  });
-  
-  // Get real-time stock quote
-  app.get("/api/realtime/quote/:symbol", async (req, res) => {
-    try {
-      const quoteData = await alphaVantageService.getStockQuote(req.params.symbol);
-      
-      if (!quoteData) {
-        // Get from database as fallback
-        const stock = await storage.getStockBySymbol(req.params.symbol);
-        if (!stock) {
-          return res.status(404).json({ success: false, message: "Stock not found" });
-        }
-        return res.status(200).json({ 
-          success: true, 
-          data: {
-            symbol: stock.symbol,
-            price: stock.currentPrice,
-            previousClose: stock.previousClose,
-            change: stock.priceChange,
-            changePercent: stock.priceChangePercent,
-            source: "database" // Indicate this is from database, not real-time
-          }
-        });
-      }
-      
-      // Format the Alpha Vantage data
-      const quote = quoteData['Global Quote'];
-      return res.status(200).json({
-        success: true,
-        data: {
-          symbol: quote['01. symbol'],
-          price: parseFloat(quote['05. price']),
-          previousClose: parseFloat(quote['08. previous close']),
-          change: parseFloat(quote['09. change']),
-          changePercent: parseFloat(quote['10. change percent'].replace('%', '')),
-          volume: parseInt(quote['06. volume']),
-          latestTradingDay: quote['07. latest trading day'],
-          source: "alpha_vantage" // Indicate this is real-time data
-        }
-      });
-    } catch (error) {
-      console.error("Error fetching real-time quote:", error);
-      return res.status(500).json({ success: false, message: "Failed to fetch real-time stock data" });
-    }
-  });
-  
-  // Search for stocks
-  app.get("/api/realtime/search", async (req, res) => {
-    try {
-      const keywords = req.query.keywords as string;
-      
-      if (!keywords) {
-        return res.status(400).json({ success: false, message: "Keywords parameter is required" });
-      }
-      
-      const searchResults = await alphaVantageService.searchStocks(keywords);
-      
-      if (!searchResults || !searchResults.bestMatches || searchResults.bestMatches.length === 0) {
-        return res.status(200).json({ success: true, data: [] });
-      }
-      
-      // Format the search results
-      const formattedResults = searchResults.bestMatches.map(match => ({
-        symbol: match['1. symbol'],
-        name: match['2. name'],
-        type: match['3. type'],
-        region: match['4. region'],
-        matchScore: parseFloat(match['9. matchScore'])
-      }));
-      
-      return res.status(200).json({ success: true, data: formattedResults });
-    } catch (error) {
-      console.error("Error searching stocks:", error);
-      return res.status(500).json({ success: false, message: "Failed to search stocks" });
-    }
-  });
-  
-  // Manually trigger real-time price update for a specific stock
-  app.post("/api/admin/update-prices", async (req, res) => {
-    try {
-      await alphaVantageService.updateStockPrices();
-      return res.status(200).json({ success: true, message: "Stock prices updated successfully from Alpha Vantage" });
-    } catch (error) {
-      return res.status(500).json({ success: false, message: "Failed to update stock prices" });
+      return res.status(500).json({ success: false, message: "Failed to create news item" });
     }
   });
 
-  const httpServer = createServer(app);
+  // Create a new stock analysis (for testing purposes)
+  app.post("/api/analyses", async (req, res) => {
+    try {
+      const validatedData = insertStockAnalysisSchema.parse(req.body);
+      const analysis = await storage.createStockAnalysis(validatedData);
+      return res.status(201).json({ success: true, data: analysis });
+    } catch (error) {
+      if (error instanceof ZodError) {
+        const validationError = fromZodError(error);
+        return res.status(400).json({ success: false, message: validationError.message });
+      }
+      return res.status(500).json({ success: false, message: "Failed to create analysis" });
+    }
+  });
 
-  return httpServer;
+  const server = createServer(app);
+
+  return server;
 }

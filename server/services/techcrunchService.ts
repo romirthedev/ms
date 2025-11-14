@@ -23,8 +23,14 @@ function detectSymbols(text: string): string[] {
   const upper = text.toUpperCase()
   const lower = text.toLowerCase()
   const set = new Set<string>()
-  const matches = upper.match(/\b[A-Z]{1,5}\b/g) || []
-  for (const t of matches) {
+  const raw: string[] = []
+  const plain = upper.match(/\b[A-Z]{1,5}\b/g) || []
+  raw.push(...plain)
+  const cash = upper.match(/\$([A-Z]{1,5})/g) || []
+  for (const m of cash) raw.push(m.replace('$',''))
+  const colon = upper.match(/\b(?:NYSE|NASDAQ|AMEX):([A-Z]{1,5})\b/g) || []
+  for (const m of colon) raw.push(m.split(':')[1])
+  for (const t of raw) {
     if (symbols.has(t) && !['A','I','AM','PM','CEO','CFO','CTO','IPO','AI','ML'].includes(t)) set.add(t)
   }
   nameToSymbol.forEach((sym, name) => { if (lower.includes(name)) set.add(sym) })

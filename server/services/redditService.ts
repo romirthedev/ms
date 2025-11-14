@@ -9,6 +9,9 @@ const SUBREDDITS = [
   'StockMarket',
   'wallstreetbets',
   'finance',
+  'business',
+  'markets',
+  'economy',
   'technology',
   'biotech',
   'worldnews',
@@ -34,22 +37,22 @@ function extractStockSymbolsFromText(text: string): string[] {
   const found = new Set<string>()
   const upper = text.toUpperCase()
 
-  // Match tickers like TSLA, AAPL, NVDA and patterns like (TSLA)
-  const tickerMatches = upper.match(/\b[A-Z]{1,5}\b/g) || []
-  for (const t of tickerMatches) {
-    if (symbols.has(t) && !['A', 'I', 'AM', 'PM', 'CEO', 'CFO', 'CTO', 'IPO', 'AI', 'ML'].includes(t)) {
+  const rawMatches: string[] = []
+  const plain = upper.match(/\b[A-Z]{1,5}\b/g) || []
+  rawMatches.push(...plain)
+  const cash = upper.match(/\$([A-Z]{1,5})/g) || []
+  for (const m of cash) rawMatches.push(m.replace('$', ''))
+  const colon = upper.match(/\b(?:NYSE|NASDAQ|AMEX):([A-Z]{1,5})\b/g) || []
+  for (const m of colon) rawMatches.push(m.split(':')[1])
+
+  for (const t of rawMatches) {
+    if (symbols.has(t) && !['A','I','AM','PM','CEO','CFO','CTO','IPO','AI','ML'].includes(t)) {
       found.add(t)
     }
   }
 
-  // Match company names
   const lower = text.toLowerCase()
-  nameToSymbol.forEach((sym, name) => {
-    if (lower.includes(name)) {
-      found.add(sym)
-    }
-  })
-
+  nameToSymbol.forEach((sym, name) => { if (lower.includes(name)) found.add(sym) })
   return Array.from(found)
 }
 
