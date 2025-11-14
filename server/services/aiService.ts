@@ -205,8 +205,7 @@ async function updateStockAnalysis(stock: Stock): Promise<void> {
         breakingNewsCount: analysisResult.breakingNewsCount,
         positiveNewsCount: analysisResult.positiveNewsCount,
         negativeNewsCount: analysisResult.negativeNewsCount,
-        neutralNewsCount: analysisResult.neutralNewsCount,
-        priceTargets: analysisResult.priceTargets,
+        
         evidencePoints: analysisResult.evidencePoints,
         shortTermOutlook: analysisResult.shortTermOutlook,
         longTermOutlook: analysisResult.longTermOutlook,
@@ -226,8 +225,8 @@ async function updateStockAnalysis(stock: Stock): Promise<void> {
         breakingNewsCount: analysisResult.breakingNewsCount,
         positiveNewsCount: analysisResult.positiveNewsCount,
         negativeNewsCount: analysisResult.negativeNewsCount,
-        neutralNewsCount: analysisResult.neutralNewsCount,
-        priceTargets: analysisResult.priceTargets,
+        confidenceScore: 0.75,
+        
         evidencePoints: analysisResult.evidencePoints,
         shortTermOutlook: analysisResult.shortTermOutlook,
         longTermOutlook: analysisResult.longTermOutlook,

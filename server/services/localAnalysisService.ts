@@ -63,7 +63,6 @@ async function analyzeStockNews(stock: Stock, news: NewsItem[]): Promise<StockAn
       'patent', 'earnings beat', 'exceeds expectations'
     ];
     
-    // Extract evidence points from news (titles)
     const evidencePoints: string[] = [];
     const titleWords = new Set<string>();
     
@@ -84,7 +83,6 @@ async function analyzeStockNews(stock: Stock, news: NewsItem[]): Promise<StockAn
         totalSentiment += 0.5; // Default neutral sentiment
       }
       
-      // Extract potential evidence points from titles (remove duplicates)
       const title = item.title.toLowerCase();
       const words = title.split(/\s+/);
       let isUnique = false;
@@ -97,7 +95,9 @@ async function analyzeStockNews(stock: Stock, news: NewsItem[]): Promise<StockAn
       }
       
       if (isUnique && evidencePoints.length < 5) {
-        evidencePoints.push(item.title);
+        const src = item.source || 'Unknown';
+        const url = item.url || '';
+        evidencePoints.push(`${item.title} — ${src}${url ? ` (${url})` : ''}`);
       }
     }
     
@@ -232,6 +232,40 @@ async function analyzeStockNews(stock: Stock, news: NewsItem[]): Promise<StockAn
       }
     }
     
+    // Competitor comparison to explain "why over competitors"
+    try {
+      if (stock.competitors && Array.isArray(stock.competitors) && stock.competitors.length > 0) {
+        const competitorSymbols = (stock.competitors as string[]).slice(0, 3);
+        let compPositive = 0; let compNegative = 0; let compBreaking = 0; let compItems = 0; let compSentimentSum = 0;
+        for (const csym of competitorSymbols) {
+          const cnews = await storage.getNewsItemsByStockSymbol(csym, 8);
+          compItems += cnews.length;
+          for (const item of cnews) {
+            const sent = item.sentiment !== null ? item.sentiment : 0.5;
+            compSentimentSum += sent;
+            if (sent > 0.6) compPositive++; else if (sent < 0.4) compNegative++;
+            const text = (item.title + ' ' + item.content).toLowerCase();
+            const breaking = ['breakthrough','announces','reveals','launches','partners','secures','wins','major','breaking','exclusive','just in','merger','acquisition','fda approval','clinical trial','patent','earnings beat','exceeds expectations'];
+            if (breaking.some(k => text.includes(k))) compBreaking++;
+          }
+        }
+        const compAvgSent = compItems > 0 ? compSentimentSum / compItems : 0.5;
+        const diffSent = avgSentiment - compAvgSent;
+        const diffBreaking = (breakingNewsCount || 0) - compBreaking;
+        const compList = competitorSymbols.join(', ');
+        summaryText += ` Compared to competitors ${compList}, ${stock.companyName} shows ${diffSent >= 0 ? 'stronger' : 'weaker'} sentiment (${avgSentiment.toFixed(2)} vs ${compAvgSent.toFixed(2)}) and ${diffBreaking >= 0 ? 'more' : 'fewer'} potentially significant items (${breakingNewsCount} vs ${compBreaking}).`;
+        if (diffSent > 0.05 || diffBreaking > 0) {
+          potentialRating = Math.min(10, potentialRating + 0.3);
+        }
+        if (movementDirection === 'stable' && diffSent > 0.1) {
+          movementDirection = 'up';
+        }
+        if (evidencePoints.length < 5) {
+          evidencePoints.push(`Outperforms competitors (${compList}): sentiment ${avgSentiment.toFixed(2)} vs ${compAvgSent.toFixed(2)}, breaking ${breakingNewsCount} vs ${compBreaking}`);
+        }
+      }
+    } catch {}
+
     return {
       potentialRating,
       summaryText,

@@ -70,7 +70,10 @@ function createNewsArticle(symbol: string, companyName: string, index: number): 
   
   const domain = domainMap[source] || 'finance.example.com';
   const urlSlug = `${companyName.toLowerCase().replace(/[^a-z0-9]+/g, '-')}-${Math.floor(Math.random() * 10000)}`;
-  const url = `https://${domain}/news/${urlSlug}.html`;
+  let url = `https://${domain}/news/${urlSlug}.html`;
+  if (domain === 'finance.example.com') {
+    url = `https://www.google.com/search?q=${encodeURIComponent(companyName + ' ' + symbol)}`;
+  }
   
   // Calculate a random published time within the last week
   const now = new Date();

@@ -16,11 +16,27 @@ import { setupAuth } from "./auth";
 import { newsService } from "./services/newsService";
 import { browserScrapingService } from "./services/browserScrapingService";
 import { simpleBrowserService } from "./services/simpleBrowserService"; 
+import { redditService } from "./services/redditService";
 import { localAnalysisService } from "./services/localAnalysisService";
+import { newsAggregationService } from "./services/newsAggregationService";
 import { alphaVantageService } from "./services/alphaVantageService";
 import { googleNewsScrapingService } from "./services/googleNewsScrapingService";
 import { deepseekAiService } from "./services/deepseekAiService";
 import { getTopLosers, getDeepseekInfo } from "./services/yfinanceAdapter";
+import { hnService } from "./services/hnService";
+import { trendingScrapeService } from "./services/trendingScrapeService";
+import { techmemeService } from "./services/techmemeService";
+import { lobstersService } from "./services/lobstersService";
+import { techcrunchService } from "./services/techcrunchService";
+import { cnbcService } from "./services/cnbcService";
+import { reutersService } from "./services/reutersService";
+import { googleNewsRssService } from "./services/googleNewsRssService";
+import { fiercebiotechService } from "./services/fiercebiotechService";
+import { nasaService } from "./services/nasaService";
+import { esaService } from "./services/esaService";
+import { spacenewsService } from "./services/spacenewsService";
+import { eetimesService } from "./services/eetimesService";
+import { semiengineeringService } from "./services/semiengineeringService";
 import { spawn } from "child_process";
 import path from "path";
 import fs from "fs";
@@ -56,9 +72,140 @@ async function performDataUpdate() {
   try {
     console.log("Performing scheduled data update...");
     
-    // Use our simple browser service which doesn't depend on Puppeteer
-    // This provides reliable news generation without external dependencies
-    await simpleBrowserService.updateAllStockNews();
+    // Ensure NASDAQ stocks are loaded
+    await simpleBrowserService.loadNasdaqStocks();
+    
+    // Ingest real news via NewsAPI sparingly to avoid rate limits
+    try {
+      const currentTime = new Date();
+      if (currentTime.getMinutes() % 30 === 0) {
+        await newsService.updateAllStockNews();
+      }
+    } catch (e) {
+      console.error("Error updating NewsAPI articles:", e);
+    }
+
+    // Scrape finance sites by ticker using headless browser (throttled)
+    try {
+      const currentTime = new Date();
+      if (currentTime.getMinutes() % 10 === 0) {
+        await browserScrapingService.updateAllStockNews();
+      }
+    } catch (e) {
+      console.error("Error updating scraped articles:", e);
+    }
+    
+    // Ingest real-time posts from Reddit
+    try {
+      const result = await redditService.updateRecentPosts();
+      console.log(`Reddit ingestion added ~${result.ingested} items`);
+    } catch (e) {
+      console.error("Error updating Reddit posts:", e);
+    }
+    // Ingest Hacker News discussions
+    try {
+      const hn = await hnService.updateRecentStories();
+      console.log(`Hacker News ingestion added ~${hn.ingested} items`);
+    } catch (e) {
+      console.error("Error updating HN stories:", e);
+    }
+
+    // Ingest trending items across Reddit hot and HN front page
+    try {
+      const tr = await trendingScrapeService.updateTrendingNews();
+      console.log(`Trending ingestion added ~${tr.ingested} items`);
+    } catch (e) {
+      console.error("Error updating trending news:", e);
+    }
+
+    // Ingest Techmeme RSS (early tech signals)
+    try {
+      const tm = await techmemeService.updateTechmeme();
+      console.log(`Techmeme ingestion added ~${tm.ingested} items`);
+    } catch (e) {
+      console.error("Error updating Techmeme feed:", e);
+    }
+
+    // Ingest Lobsters RSS (developer news)
+    try {
+      const lb = await lobstersService.updateLobsters();
+      console.log(`Lobsters ingestion added ~${lb.ingested} items`);
+    } catch (e) {
+      console.error("Error updating Lobsters feed:", e);
+    }
+
+    // Ingest TechCrunch RSS
+    try {
+      const tc = await techcrunchService.updateTechcrunch();
+      console.log(`TechCrunch ingestion added ~${tc.ingested} items`);
+    } catch (e) {
+      console.error("Error updating TechCrunch feed:", e);
+    }
+
+    // Ingest CNBC Top News RSS
+    try {
+      const cb = await cnbcService.updateCnbc();
+      console.log(`CNBC ingestion added ~${cb.ingested} items`);
+    } catch (e) {
+      console.error("Error updating CNBC feed:", e);
+    }
+
+    // Ingest Reuters Markets RSS
+    try {
+      const rt = await reutersService.updateReuters();
+      console.log(`Reuters ingestion added ~${rt.ingested} items`);
+    } catch (e) {
+      console.error("Error updating Reuters feed:", e);
+    }
+
+    try {
+      const gn = await googleNewsRssService.updateGoogleNews();
+      console.log(`Google News RSS ingestion added ~${gn.ingested} items`);
+    } catch (e) {
+      console.error("Error updating Google News RSS feed:", e);
+    }
+
+    try {
+      const fb = await fiercebiotechService.updateFiercebiotech();
+      console.log(`FierceBiotech ingestion added ~${fb.ingested} items`);
+    } catch (e) {
+      console.error("Error updating FierceBiotech feed:", e);
+    }
+
+    try {
+      const ns = await nasaService.updateNasa();
+      console.log(`NASA ingestion added ~${ns.ingested} items`);
+    } catch (e) {
+      console.error("Error updating NASA feed:", e);
+    }
+
+    try {
+      const es = await esaService.updateEsa();
+      console.log(`ESA ingestion added ~${es.ingested} items`);
+    } catch (e) {
+      console.error("Error updating ESA feed:", e);
+    }
+
+    try {
+      const sn = await spacenewsService.updateSpacenews();
+      console.log(`SpaceNews ingestion added ~${sn.ingested} items`);
+    } catch (e) {
+      console.error("Error updating SpaceNews feed:", e);
+    }
+
+    try {
+      const et = await eetimesService.updateEetimes();
+      console.log(`EE Times ingestion added ~${et.ingested} items`);
+    } catch (e) {
+      console.error("Error updating EE Times feed:", e);
+    }
+
+    try {
+      const se = await semiengineeringService.updateSemiengineering();
+      console.log(`SemiEngineering ingestion added ~${se.ingested} items`);
+    } catch (e) {
+      console.error("Error updating SemiEngineering feed:", e);
+    }
     
     // Update stock prices using Alpha Vantage for real-time data
     // This happens less frequently due to API rate limits (every 3 cycles)
@@ -72,8 +219,13 @@ async function performDataUpdate() {
       }
     }
     
-    // Update stock analysis using our local algorithm instead of external API
-    await localAnalysisService.updateAllStockAnalyses();
+    // Generate analyses from recent breaking news across categories
+    try {
+      const ag = await newsAggregationService.generateAnalysesFromRecentNews();
+      console.log(`Aggregated analyses created/updated: ~${ag.analyzed}`);
+    } catch (e) {
+      console.error("Error generating aggregated analyses:", e);
+    }
     
     console.log("Scheduled data update completed");
   } catch (error) {
@@ -441,9 +593,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Manually trigger news update
   app.post("/api/admin/update-news", async (req, res) => {
     try {
-      // Use our simple browser service instead of Puppeteer-based one
-      await simpleBrowserService.updateAllStockNews();
-      return res.status(200).json({ success: true, message: "News update triggered successfully using simple browser service" });
+      await newsService.updateAllStockNews();
+      return res.status(200).json({ success: true, message: "News update triggered successfully using NewsAPI" });
     } catch (error) {
       return res.status(500).json({ success: false, message: "Failed to trigger news update" });
     }
@@ -457,6 +608,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
       return res.status(200).json({ success: true, message: "Analysis update triggered successfully using local algorithm" });
     } catch (error) {
       return res.status(500).json({ success: false, message: "Failed to trigger analysis update" });
+    }
+  });
+
+  // Manually trigger Reddit ingestion
+  app.post("/api/admin/update-reddit", async (req, res) => {
+    try {
+      const result = await redditService.updateRecentPosts();
+      return res.status(200).json({ success: true, message: `Reddit update ingested ~${result.ingested} posts` });
+    } catch (error) {
+      return res.status(500).json({ success: false, message: "Failed to trigger Reddit update" });
     }
   });
   
@@ -630,56 +791,52 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
   
-  // Get Google News + AI Analysis for a specific stock
+  // AI Analysis for a specific stock using stored news + competitor context
   app.get('/api/analyses/ai/:symbol', async (req, res) => {
     const symbol = req.params.symbol.toUpperCase();
     const stock = await storage.getStockBySymbol(symbol);
-    
     if (!stock) {
-      return res.status(404).json({
-        success: false,
-        message: `Stock with symbol ${symbol} not found`
-      });
+      return res.status(404).json({ success: false, message: `Stock with symbol ${symbol} not found` });
     }
-    
     try {
-      console.log(`Generating AI analysis for ${symbol} (${stock.companyName})...`);
-      
-      // Get Google News articles
-      const newsArticles = await googleNewsScrapingService.scrapeGoogleNews(symbol, stock.companyName);
-      const newsText = googleNewsScrapingService.prepareNewsTextForAnalysis(newsArticles, symbol, stock.companyName);
-      
-      // Get AI Analysis from DeepSeek
+      console.log(`Generating AI analysis for ${symbol} (${stock.companyName}) using stored news...`);
+      const newsItems = await storage.getNewsItemsByStockSymbol(symbol, 12);
+      const articlesUsed = newsItems.map(n => ({ id: n.id, title: n.title, source: n.source, url: n.url, publishedAt: n.publishedAt, sentiment: n.sentiment }));
+      let newsText = `Recent news articles for ${symbol} (${stock.companyName}):\n`;
+      newsText += articlesUsed.map((a, i) => `Article ${i + 1}:\nTitle: ${a.title}\nSource: ${a.source}\nTime: ${a.publishedAt.toISOString()}\nURL: ${a.url}\n---`).join('\n');
+      const competitors = Array.isArray(stock.competitors) ? stock.competitors : [];
+      if (competitors.length) {
+        newsText += `\nCompetitor context:`;
+        for (const comp of competitors.slice(0, 3)) {
+          const compStock = await storage.getStockBySymbol(comp);
+          if (compStock) {
+            const compNews = await storage.getNewsItemsByStockSymbol(comp, 3);
+            newsText += `\nCompetitor ${compStock.symbol} (${compStock.companyName}):`;
+            for (let i = 0; i < compNews.length; i++) {
+              const cn = compNews[i];
+              newsText += `\n- ${cn.title} [${cn.source}] (${cn.publishedAt.toISOString()}) ${cn.url}`;
+            }
+          }
+        }
+      }
       const analysisResult = await deepseekAiService.analyzeStockNews(stock, newsText);
-      
-      // Combine results
       const response = {
         ...analysisResult,
-        stock: {
-          symbol: stock.symbol,
-          companyName: stock.companyName,
-          currentPrice: stock.currentPrice,
-          priceChange: stock.priceChange,
-          priceChangePercent: stock.priceChangePercent
-        },
-        newsCount: newsArticles.length,
-        newsArticles: newsArticles,
-        source: 'Google News',
+        stock: { symbol: stock.symbol, companyName: stock.companyName, currentPrice: stock.currentPrice, priceChange: stock.priceChange, priceChangePercent: stock.priceChangePercent },
+        newsCount: articlesUsed.length,
+        newsArticles: articlesUsed,
+        source: 'Stored News + Reddit',
         analysisMethod: 'DeepSeek AI',
         analysisDate: new Date().toISOString()
       };
-      
-      return res.status(200).json({
-        success: true,
-        data: response
-      });
+      if (!response.evidencePoints || response.evidencePoints.length === 0) {
+        response.evidencePoints = articlesUsed.slice(0,3).map(a => a.title);
+      }
+      return res.status(200).json({ success: true, data: response });
     } catch (error: unknown) {
       const errorMessage = error instanceof Error ? error.message : String(error);
       console.error(`Error generating AI analysis for ${symbol}:`, error);
-      return res.status(500).json({ 
-        success: false, 
-        message: `Could not generate AI analysis for ${symbol}: ${errorMessage}` 
-      });
+      return res.status(500).json({ success: false, message: `Could not generate AI analysis for ${symbol}: ${errorMessage}` });
     }
   });
   

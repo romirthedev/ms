@@ -46,12 +46,19 @@ const browserConfig = {
  * @param symbol Stock symbol to fetch news for
  * @param companyName Company name for context
  */
+let sharedBrowser: any = null;
+async function getBrowser(): Promise<any> {
+  if (sharedBrowser) return sharedBrowser;
+  sharedBrowser = await puppeteer.launch(browserConfig.puppeteer);
+  return sharedBrowser;
+}
+
 async function fetchNewsForStock(symbol: string, companyName: string): Promise<InsertNewsItem[]> {
   console.log(`Scraping news for ${symbol} (${companyName})`);
   
   try {
-    // Initialize the browser
-    const browser = await puppeteer.launch(browserConfig.puppeteer);
+    // Initialize or reuse the browser
+    const browser = await getBrowser();
     
     let allNewsItems: InsertNewsItem[] = [];
     
@@ -60,10 +67,19 @@ async function fetchNewsForStock(symbol: string, companyName: string): Promise<I
       try {
         const page = await browser.newPage();
         await page.setUserAgent('Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36');
+        await page.setRequestInterception(true);
+        page.on('request', (req: any) => {
+          const resourceType = req.resourceType();
+          if (['image','stylesheet','font','media'].includes(resourceType)) {
+            req.abort();
+          } else {
+            req.continue();
+          }
+        });
         
         // Navigate to the search URL for this stock
         const url = source.searchUrl(symbol);
-        await page.goto(url, { waitUntil: 'networkidle2', timeout: 30000 });
+        await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 60000 });
         
         // Wait for articles to load
         await page.waitForSelector(source.articleSelector, { timeout: 10000 }).catch(() => {
@@ -71,14 +87,14 @@ async function fetchNewsForStock(symbol: string, companyName: string): Promise<I
         });
         
         // Extract article data
-        const articles = await page.evaluate((selectors) => {
+        const articles = await page.evaluate((selectors: any) => {
           const articleElements = Array.from(document.querySelectorAll(selectors.articleSelector));
           return articleElements.slice(0, 5).map(article => {
-            const titleElem = article.querySelector(selectors.titleSelector);
-            const linkElem = article.querySelector(selectors.linkSelector) as HTMLAnchorElement;
-            const descElem = article.querySelector(selectors.descriptionSelector);
-            const dateElem = article.querySelector(selectors.dateSelector);
-            const imageElem = article.querySelector(selectors.imageSelector) as HTMLImageElement;
+            const titleElem = (article as any).querySelector(selectors.titleSelector);
+            const linkElem = (article as any).querySelector(selectors.linkSelector) as HTMLAnchorElement;
+            const descElem = (article as any).querySelector(selectors.descriptionSelector);
+            const dateElem = (article as any).querySelector(selectors.dateSelector);
+            const imageElem = (article as any).querySelector(selectors.imageSelector) as HTMLImageElement;
             
             return {
               title: titleElem ? titleElem.textContent?.trim() || '' : '',
@@ -91,7 +107,7 @@ async function fetchNewsForStock(symbol: string, companyName: string): Promise<I
         }, source);
         
         // Process and transform the data
-        const newsItems = articles.map(article => {
+        const newsItems = articles.map((article: any) => {
           // Parse date string or use current date if can't parse
           let publishedDate: Date;
           try {
@@ -123,7 +139,7 @@ async function fetchNewsForStock(symbol: string, companyName: string): Promise<I
       }
     }
     
-    await browser.close();
+    // Do not close sharedBrowser here; handled in updateAllStockNews
     
     // Deduplicate news based on URL
     const uniqueUrls = new Set<string>();
@@ -222,19 +238,29 @@ async function updateAllStockNews(): Promise<void> {
     const stocks = await storage.getStocks();
     console.log(`Found ${stocks.length} stocks to update news for`);
     
-    // Update news for each stock, one at a time to avoid overloading
-    for (const stock of stocks) {
+    // Process a limited batch per cycle to avoid overload
+    const batchSize = 15;
+    const startIndex = Math.floor(Math.random() * Math.max(stocks.length - batchSize, 0));
+    const batch = stocks.slice(startIndex, startIndex + batchSize);
+    for (const stock of batch) {
       await updateStockNews(stock);
-      // Add small delay between stocks to avoid being rate limited or blocked
-      await new Promise(resolve => setTimeout(resolve, 2000));
+      await new Promise(resolve => setTimeout(resolve, 300));
     }
     
     // Discover new potential stocks from news
     await discoverStocksFromNews();
     
     console.log('Browser-based news update completed');
+    if (sharedBrowser) {
+      try { await sharedBrowser.close(); } catch {}
+      sharedBrowser = null;
+    }
   } catch (error) {
     console.error('Error updating stock news:', error);
+    if (sharedBrowser) {
+      try { await sharedBrowser.close(); } catch {}
+      sharedBrowser = null;
+    }
   }
 }
 

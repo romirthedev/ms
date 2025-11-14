@@ -394,9 +394,8 @@ async function loadNasdaqStocks(): Promise<void> {
         await storage.createStock(newStock);
         newStocksCount++;
         
-        // Generate initial news for this stock, but only for a subset to avoid overwhelming
+        // Progress logging only; news generation handled by real ingestors
         if (newStocksCount % batchSize === 0) {
-          await updateStockNews(newStock);
           console.log(`Progress: Added ${newStocksCount}/${NASDAQ_STOCKS.length} new stocks`);
         }
       }
@@ -559,5 +558,6 @@ export const simpleBrowserService = {
   analyzeSentiment,
   updateStockNews,
   updateAllStockNews,
-  discoverStocksFromNews
+  discoverStocksFromNews,
+  loadNasdaqStocks
 };

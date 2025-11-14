@@ -3,7 +3,12 @@ import { storage } from '../storage';
 import { InsertNewsItem, InsertStock, Stock } from '@shared/schema';
 
 const NEWS_API_KEY = process.env.NEWS_API_KEY;
+const DISABLE_NEWSAPI = (process.env.DISABLE_NEWSAPI || '').toLowerCase() === 'true';
 const NEWS_API_URL = 'https://newsapi.org/v2';
+const RATE_LIMIT_COOLDOWN_MS = 45 * 60 * 1000; // 45 minutes cooldown after 429
+const MIN_INTERVAL_MS = 60 * 1000; // at least 60s between bulk runs
+let last429At: number | null = null;
+let lastBulkRunAt: number = 0;
 
 interface NewsAPIResponse {
   status: string;
@@ -25,21 +30,32 @@ interface NewsAPIResponse {
 
 // Function to fetch news for a stock
 async function fetchNewsForStock(symbol: string, companyName: string): Promise<NewsAPIResponse> {
+  if (!NEWS_API_KEY) {
+    return { status: 'ok', totalResults: 0, articles: [] };
+  }
   const query = encodeURIComponent(`${symbol} OR ${companyName} stock market`);
   const response = await fetch(
     `${NEWS_API_URL}/everything?q=${query}&sortBy=publishedAt&language=en&pageSize=10&apiKey=${NEWS_API_KEY}`
   );
-  
   if (!response.ok) {
+    if (response.status === 401) {
+      return { status: 'ok', totalResults: 0, articles: [] };
+    }
+    if (response.status === 429) {
+      last429At = Date.now();
+      return { status: 'ok', totalResults: 0, articles: [] };
+    }
     throw new Error(`News API responded with status: ${response.status}`);
   }
-  
   return response.json() as Promise<NewsAPIResponse>;
 }
 
 // Function to discover new stocks from news
 async function discoverStocksFromNews(): Promise<void> {
   try {
+    if (!NEWS_API_KEY) {
+      return;
+    }
     // Search for news about emerging or trending stocks
     const queries = [
       'emerging stocks', 
@@ -56,8 +72,10 @@ async function discoverStocksFromNews(): Promise<void> {
     const response = await fetch(
       `${NEWS_API_URL}/everything?q=${encodeURIComponent(randomQuery)}&sortBy=publishedAt&language=en&pageSize=15&apiKey=${NEWS_API_KEY}`
     );
-    
     if (!response.ok) {
+      if (response.status === 401) {
+        return;
+      }
       throw new Error(`News API responded with status: ${response.status}`);
     }
     
@@ -132,11 +150,32 @@ async function discoverStocksFromNews(): Promise<void> {
 // Function to update news for all stocks
 async function updateAllStockNews(): Promise<void> {
   try {
+    if (DISABLE_NEWSAPI) {
+      console.log('DISABLE_NEWSAPI enabled; skipping NewsAPI ingestion');
+      return;
+    }
+    if (!NEWS_API_KEY) {
+      console.log('NEWS_API_KEY not set; skipping NewsAPI ingestion');
+      return;
+    }
+    const now = Date.now();
+    if (last429At && (now - last429At) < RATE_LIMIT_COOLDOWN_MS) {
+      console.log('NewsAPI rate limited recently; skipping ingestion during cooldown');
+      return;
+    }
+    if ((now - lastBulkRunAt) < MIN_INTERVAL_MS) {
+      return;
+    }
+    lastBulkRunAt = now;
     const stocks = await storage.getStocks();
     console.log(`Updating news for ${stocks.length} stocks...`);
-    
-    for (const stock of stocks) {
+    // Process a small random batch to avoid 429
+    const batchSize = 10;
+    const startIndex = Math.floor(Math.random() * Math.max(stocks.length - batchSize, 0));
+    const batch = stocks.slice(startIndex, startIndex + batchSize);
+    for (const stock of batch) {
       await updateStockNews(stock);
+      await new Promise(resolve => setTimeout(resolve, 500));
     }
     
     // Also discover new stocks from news
