@@ -105,7 +105,7 @@ interface AIAnalysisResult {
 const StockNewsSources: React.FC<{ stockSymbol: string }> = ({ stockSymbol }) => {
   const [limit, setLimit] = useState(25);
   const { data, isLoading } = useQuery<{ success: boolean; data: NewsItem[] }>({
-    queryKey: [`/api/news/stock/${stockSymbol}?limit=${limit}&windowHours=24`],
+    queryKey: [`/api/news/stock/${stockSymbol}?limit=${limit}&windowHours=72`],
     enabled: !!stockSymbol,
   });
 
@@ -588,7 +588,7 @@ const DashboardPage = () => {
     data: stockNews, 
     isLoading: loadingNews 
   } = useQuery<{ success: boolean; data: NewsItem[] }>({
-    queryKey: [selectedStock ? `/api/news/stock/${selectedStock}?limit=25&windowHours=24` : ''],
+    queryKey: [selectedStock ? `/api/news/stock/${selectedStock}?limit=25&windowHours=72` : ''],
     enabled: selectedStock !== null,
   });
   

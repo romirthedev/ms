@@ -491,6 +491,19 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const limit = req.query.limit ? parseInt(req.query.limit as string) : 25;
       const windowHours = req.query.windowHours ? parseInt(req.query.windowHours as string) : 48;
       const symbol = req.params.symbol.toUpperCase();
+      const storage = await getStorage();
+      const stocks = await storage.getStocks();
+      if (!stocks || stocks.length === 0) {
+        await storage.initializeAsync();
+        await simpleBrowserService.loadNasdaqStocks();
+      }
+      await Promise.allSettled([
+        googleNewsRssService.updateGoogleNews(),
+        trendingScrapeService.updateTrendingNews(),
+        techmemeService.updateTechmeme(),
+        reutersService.updateReuters(),
+        techcrunchService.updateTechcrunch()
+      ]);
       let news = await storage.getNewsItemsByStockSymbol(symbol, limit);
 
       if (news.length < limit) {

@@ -2,10 +2,20 @@ export default async function handler(req: any, res: any) {
   try {
     const mod = await import("../../server/storage");
     const storage = mod.storage;
-    const existing = await storage.getStockAnalyses(1);
-    if (!existing || existing.length === 0) {
+    const stocks = await storage.getStocks();
+    if (!stocks || stocks.length === 0) {
       await storage.initializeAsync();
+      const sb = await import("../../server/services/simpleBrowserService");
+      await sb.simpleBrowserService.loadNasdaqStocks();
     }
+    const services = await Promise.allSettled([
+      import("../../server/services/googleNewsRssService").then(m => m.googleNewsRssService.updateGoogleNews()),
+      import("../../server/services/trendingScrapeService").then(m => m.trendingScrapeService.updateTrendingNews()),
+      import("../../server/services/techmemeService").then(m => m.techmemeService.updateTechmeme()),
+      import("../../server/services/reutersService").then(m => m.reutersService.updateReuters()),
+      import("../../server/services/techcrunchService").then(m => m.techcrunchService.updateTechcrunch())
+    ]);
+    await import("../../server/services/newsAggregationService").then(m => m.newsAggregationService.generateAnalysesFromRecentNews());
     const analyses = await storage.getTopRatedStockAnalyses(5);
     return res.status(200).json({ success: true, data: analyses });
   } catch (_) {
