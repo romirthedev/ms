@@ -14,7 +14,7 @@ import {
   type InsertStockAnalysis,
   type UserWatchlist,
   type InsertUserWatchlist
-} from "../shared/schema.ts";
+} from "../shared/schema";
 import session from "express-session";
 import createMemoryStore from "memorystore";
 

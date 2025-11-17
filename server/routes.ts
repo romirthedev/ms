@@ -8,7 +8,7 @@ import {
   insertStockAnalysisSchema,
   insertUserWatchlistSchema,
   Stock
-} from "../shared/schema.ts";
+} from "../shared/schema";
 import { ZodError } from "zod";
 import { fromZodError } from "zod-validation-error";
 import { newsService } from "./services/newsService";
