@@ -1,5 +1,6 @@
 // Simple JavaScript entry point for Vercel
-const express = require('express');
+import express from 'express';
+import serverless from 'serverless-http';
 
 console.log('[Vercel] Starting simple JavaScript handler...');
 
@@ -22,13 +23,5 @@ app.get('/api/health', (req, res) => {
   return res.json({ success: true, message: 'API is running' });
 });
 
-// Use serverless-http if available
-try {
-  const serverless = require('serverless-http');
-  console.log('[Vercel] serverless-http available, wrapping app');
-  module.exports = serverless(app);
-} catch (error) {
-  console.error('[Vercel] serverless-http not available, using fallback');
-  // Fallback for local development
-  module.exports = app;
-}
+// Export as serverless function
+export default serverless(app);
